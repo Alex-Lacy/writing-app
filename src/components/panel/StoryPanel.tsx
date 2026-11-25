@@ -1,11 +1,19 @@
 import { countWords } from '../../context/length';
 import { currentChat, ui, useStore, type PanelTab } from '../../store/store';
-import { activeSwipe } from '../../types';
+import { activeSwipe, type Message } from '../../types';
 import { CodexTab } from './CodexTab';
 import { FilterTab } from './FilterTab';
 import { HelperTab } from './HelperTab';
 import { SetupTab } from './SetupTab';
 import { SuggestionsTab } from './SuggestionsTab';
+
+// Messages are replaced when they change, so a count per message object stays right.
+const counted = new WeakMap<Message, number>();
+function wordsIn(m: Message) {
+  let n = counted.get(m);
+  if (n === undefined) counted.set(m, (n = m.role === 'system' ? 0 : countWords(activeSwipe(m).content)));
+  return n;
+}
 
 const TABS: [PanelTab, string][] = [
   ['setup', 'Setup'],
@@ -20,7 +28,7 @@ export function StoryPanel() {
   const tab = useStore((s) => s.panelTab);
   const chat = useStore((s) => currentChat(s));
   const pending = useStore((s) => s.suggestions.filter((x) => x.chatId === s.currentChatId && x.status === 'pending').length);
-  const words = useStore((s) => s.messages.reduce((n, m) => (m.role === 'system' ? n : n + countWords(activeSwipe(m).content)), 0));
+  const words = useStore((s) => s.messages.reduce((n, m) => n + wordsIn(m), 0));
   if (!chat) return null;
   return (
     <aside className="panel">

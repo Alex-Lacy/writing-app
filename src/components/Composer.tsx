@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { LENGTH_BUCKETS, LENGTH_ORDER, type LengthBucket } from '../context/length';
-import { currentChat, insertMessage, modelFor, send, stop, updateChat, useStore } from '../store/store';
+import { cancelWait, currentChat, insertMessage, modelFor, send, stop, updateChat, useStore } from '../store/store';
 import type { Attachment, ThinkingMode } from '../types';
 import { readAttachment } from '../lib/attach';
 
@@ -121,10 +121,12 @@ export function Composer() {
             <button
               className="ghost small"
               title="Add your text to the story without asking the AI for a reply"
-              disabled={!text.trim()}
-              onClick={() => { void insertMessage('user', text); setText(''); }}
+              disabled={!text.trim() || !!waiting}
+              onClick={() => { void insertMessage('user', text, atts.length ? atts : undefined); setText(''); setAtts([]); }}
             >Add only</button>
-            <button className="primary" onClick={submit} disabled={!!waiting} title={waiting}>{waiting ? 'Waiting…' : 'Send'}</button>
+            {waiting
+              ? <button onClick={cancelWait} title="Don't send this reply; the side job carries on">Cancel</button>
+              : <button className="primary" onClick={submit}>Send</button>}
           </>
         )}
       </div>

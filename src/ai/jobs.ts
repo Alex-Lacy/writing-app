@@ -86,10 +86,10 @@ async function waitForStoryReply() {
  * so a background job is stopped (it runs again after a later reply) and a Helper or Proofread
  * request is allowed to finish first.
  */
-export async function makeRoomForStory(): Promise<void> {
+export async function makeRoomForStory(cancelled: () => boolean = () => false): Promise<void> {
   storyWaiting = true;
   if (running && BACKGROUND.includes(running.job)) running.abort.abort();
-  while (running) await new Promise((r) => setTimeout(r, 200));
+  while (running && !cancelled()) await new Promise((r) => setTimeout(r, 200));
 }
 /** The story reply has started (or failed to); jobs may queue behind it again. */
 export function storyStarted() {

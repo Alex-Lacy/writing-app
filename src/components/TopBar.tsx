@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { replyReserve, saveSettings, buildFor, contextLimitFor, currentChat, modelLabel, ui, updateChat, useStore } from '../store/store';
+import { useDeferredValue, useMemo } from 'react';
+import { replyReserve, saveSettings, previewFor, contextLimitFor, currentChat, modelLabel, ui, updateChat, useStore } from '../store/store';
 
 export function TopBar() {
   const chat = useStore((s) => currentChat(s));
@@ -12,7 +12,9 @@ export function TopBar() {
   const jobs = useStore((s) => s.jobs);
   const pending = useStore((s) => s.suggestions.filter((x) => x.chatId === s.currentChatId && x.status === 'pending').length);
 
-  const stats = useMemo(() => (chat && !streaming ? buildFor(chat, messages) : undefined), [chat, messages, streaming]);
+  // Deferred: typing in Setup shouldn't wait for a context rebuild on every key.
+  const lazyChat = useDeferredValue(chat);
+  const stats = useMemo(() => (lazyChat && !streaming ? previewFor(lazyChat, messages) : undefined), [lazyChat, messages, streaming]);
   const used = stats ? stats.tokens.total : 0;
   const pct = Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
   const sorted = [...models].sort((a, b) => modelLabel(a).localeCompare(modelLabel(b)));

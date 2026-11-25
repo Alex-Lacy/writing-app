@@ -104,8 +104,13 @@ export async function rewriteMessage(chatId: string, messageId: string, feedback
     useStore.setState({ messages: useStore.getState().messages.map((x) => (x.id === next.id ? next : x)) });
     if (persist) await repo.put('messages', next);
   };
-  const setText = (m: Message, text: string) => ({ ...m, swipes: m.swipes.map((x, i) => (i === slot ? { ...x, content: text } : x)) });
-  await write((m) => ({ ...m, swipes: [...m.swipes, { content: '', createdAt: Date.now(), modelKey: activeSwipe(m0).modelKey }], activeSwipe: m.swipes.length }), false);
+  const fresh = () => ({ content: '', createdAt: Date.now(), modelKey: activeSwipe(m0).modelKey });
+  const setText = (m: Message, text: string) => {
+    const swipes = m.swipes.length > slot ? m.swipes : [...m.swipes, fresh()];
+    return { ...m, swipes: swipes.map((x, i) => (i === slot ? { ...x, content: text } : x)) };
+  };
+  // Saved straight away, so switching story while it runs doesn't lose the new version.
+  await write((m) => ({ ...m, swipes: [...m.swipes, fresh()], activeSwipe: m.swipes.length }), true);
   try {
     const res = await runJob({
       job: 'rewrite',

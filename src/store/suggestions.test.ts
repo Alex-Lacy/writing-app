@@ -51,6 +51,32 @@ describe('suggestions', () => {
     await undo(x.id);
     expect(useStore.getState().codex.find((b) => b.id === chat().codexId)!.entries).toEqual([]);
   });
+  it('undo refuses when the field was edited after accepting', async () => {
+    const [x] = await addSuggestions(chat().id, [{ source: 'helper', target: { kind: 'background' }, before: '', after: 'New world' }]);
+    await accept(x.id);
+    await updateChat({ writing: { ...chat().writing, background: 'New world, and more I typed' } });
+    await undo(x.id);
+    expect(chat().writing.background).toBe('New world, and more I typed');
+    expect(useStore.getState().error).toMatch(/edited/);
+  });
+  it('a double tap on Accept applies a card once', async () => {
+    const e = entry({ id: 'e2', name: 'Mara', keys: ['Mara'] });
+    const [x] = await addSuggestions(chat().id, [{ source: 'helper', target: { kind: 'codex-add', bookId: OWN_BOOK, entry: e }, before: '', after: 'Smuggler' }]);
+    await Promise.all([accept(x.id), accept(x.id)]);
+    expect(useStore.getState().codex.find((b) => b.id === chat().codexId)!.entries).toHaveLength(1);
+  });
+  it('undoing one summary part keeps the parts added after it', async () => {
+    const msgs = ['a', 'b', 'c', 'd'].map((id, i) => ({ id, chatId: chat().id, role: 'assistant', createdAt: 0, order: i, activeSwipe: 0, swipes: [{ content: id, createdAt: 0 }] }) as Message);
+    useStore.setState({ messages: msgs });
+    const part = (id: string, ids: string[]) => ({ source: 'summary' as const, target: { kind: 'summary' as const, part: { id, messageIds: ids, text: '', createdAt: 0 } }, before: '', after: `sum ${id}` });
+    const [p1, p2] = await addSuggestions(chat().id, [part('p1', ['a', 'b']), part('p2', ['c'])]);
+    await accept(p1.id);
+    await accept(p2.id);
+    await undo(p1.id);
+    expect(chat().summary!.map((p) => p.id)).toEqual(['p2']);
+    const condensed = useStore.getState().messages.filter((m) => m.condensed).map((m) => m.id);
+    expect(condensed).toEqual(['c']);
+  });
   it('reject leaves things alone', async () => {
     const [x] = await addSuggestions(chat().id, [{ source: 'helper', target: { kind: 'title' }, before: 'New story', after: 'Other' }]);
     await reject(x.id);

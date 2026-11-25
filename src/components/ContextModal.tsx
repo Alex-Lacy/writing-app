@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Part } from '../context/build';
-import { buildFor, contextLimitFor, currentChat, replyReserve, sendMaxTokens, ui, useStore } from '../store/store';
+import { previewFor, contextLimitFor, currentChat, replyReserve, sendMaxTokens, ui, useStore } from '../store/store';
 
 // How each message is sent. The legend and chips name the content; this names the role.
 const ROLE_LABEL = { system: 'sent as system instructions', user: 'sent as your turn', assistant: 'sent as the AI\'s turn' } as const;
@@ -28,7 +28,7 @@ export function ContextModal() {
   const streaming = useStore((s) => !!s.streamingId);
   const limit = useStore((s) => contextLimitFor(currentChat(s), s));
   const margin = useStore((s) => s.settings.safetyMargin);
-  const preview = useMemo(() => (chat ? buildFor(chat, messages) : undefined), [chat, messages]);
+  const preview = useMemo(() => (chat ? previewFor(chat, messages) : undefined), [chat, messages]);
   const ctx = streaming ? last : preview;
   const [copied, setCopied] = useState(false);
   if (!chat || !ctx) return null;

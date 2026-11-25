@@ -7,6 +7,12 @@ import { activeSwipe, type Message } from '../types';
 import { ClicheChip, MessageCards, RewriteBox } from './MessageTools';
 import { useCliches, useHighlight } from './messageHooks';
 
+// A ⋯ menu closes when you tap anywhere else.
+if (typeof document !== 'undefined')
+  document.addEventListener('pointerdown', (e) => {
+    for (const d of document.querySelectorAll<HTMLDetailsElement>('details.more[open]')) if (!d.contains(e.target as Node)) d.open = false;
+  });
+
 interface Props {
   m: Message;
   isLast: boolean;

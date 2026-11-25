@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { buildFor, currentChat, modelFor, useStore } from '../store/store';
+import { useDeferredValue, useEffect, useMemo, useRef } from 'react';
+import { previewFor, currentChat, modelFor, useStore } from '../store/store';
 import { MessageItem } from './MessageItem';
 import { Composer } from './Composer';
 import { SelectionToolbar } from './MessageTools';
@@ -15,10 +15,11 @@ export function ChatView() {
   const stick = useRef(true);
 
   // Which messages fall outside the context window right now.
+  const lazyChat = useDeferredValue(chat);
   const dropped = useMemo(() => {
-    if (!chat || streamingId) return new Set<string>();
-    return new Set(buildFor(chat, messages).droppedIds);
-  }, [chat, messages, streamingId]);
+    if (!lazyChat || streamingId) return new Set<string>();
+    return new Set(previewFor(lazyChat, messages).droppedIds);
+  }, [lazyChat, messages, streamingId]);
 
   useEffect(() => {
     const el = scroller.current;

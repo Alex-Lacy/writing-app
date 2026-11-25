@@ -6,6 +6,7 @@ import { locate } from './messageHooks';
 import type { Hit } from '../features/filter/rules';
 import { proofread, rewriteMessage, rewritePassage } from '../features/rewrite';
 import { ui, useStore } from '../store/store';
+import { nearest } from '../store/suggestions';
 import { activeSwipe, type Message } from '../types';
 import { SuggestionCard } from './panel/SuggestionCard';
 
@@ -65,7 +66,11 @@ export function RewriteBox({ m }: { m: Message }) {
   }, [open]);
   if (!target || !open || !chatId) return null;
   const content = activeSwipe(m).content;
-  const part = target.from !== undefined && target.to !== undefined ? { from: target.from, to: target.to } : undefined;
+  let part = target.from !== undefined && target.to !== undefined ? { from: target.from, to: target.to } : undefined;
+  if (part && target.text && content.slice(part.from, part.to) !== target.text) {
+    const at = nearest(content, target.text, part.from);
+    part = at < 0 ? undefined : { from: at, to: at + target.text.length };
+  }
   const quote = part ? content.slice(part.from, part.to) : '';
 
   const run = async (what: 'rewrite' | 'proofread') => {
@@ -122,8 +127,8 @@ export function RewriteBox({ m }: { m: Message }) {
 export function MessageCards({ m }: { m: Message }) {
   const all = useStore((s) => s.suggestions);
   const cards = useMemo(
-    () => all.filter((x) => x.status === 'pending' && x.target.kind === 'passage' && x.target.messageId === m.id).sort((a, b) => a.createdAt - b.createdAt),
-    [all, m.id],
+    () => all.filter((x) => x.status === 'pending' && x.target.kind === 'passage' && x.target.messageId === m.id && x.target.swipe === m.activeSwipe).sort((a, b) => a.createdAt - b.createdAt),
+    [all, m.id, m.activeSwipe],
   );
   const [open, setOpen] = useState(true);
   if (!cards.length) return null;
@@ -174,7 +179,8 @@ export function SelectionToolbar() {
   }, []);
   if (!pos || busy) return null;
   const open = () => {
-    ui.openRewrite({ messageId: pos.messageId, from: pos.from, to: pos.to });
+    const msg = useStore.getState().messages.find((x) => x.id === pos.messageId);
+    ui.openRewrite({ messageId: pos.messageId, from: pos.from, to: pos.to, text: msg && activeSwipe(msg).content.slice(pos.from, pos.to) });
     getSelection()?.removeAllRanges();
     setPos(undefined);
   };

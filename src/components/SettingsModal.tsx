@@ -1,3 +1,4 @@
+import { NumberInput } from './NumberInput';
 import { useEffect, useMemo, useState } from 'react';
 import { repo } from '../db/db';
 import { uid } from '../lib/id';
@@ -74,7 +75,7 @@ function Providers({ onDone }: { onDone: () => void }) {
             <summary className="muted small">Service details: name, address, context limit</summary>
             <div className="grid2">
               <label className="field"><span>Name</span><input value={p.name} onChange={(e) => update(p, { name: e.target.value })} /></label>
-              <label className="field" title="The most context this service allows, whatever the model supports"><span>Context limit (tokens)</span><input type="number" value={p.contextLimit} onChange={(e) => update(p, { contextLimit: Number(e.target.value) || 8192 })} /></label>
+              <label className="field" title="The most context this service allows, whatever the model supports"><span>Context limit (tokens)</span><NumberInput value={p.contextLimit} min={512} fallback={8192} onChange={(n) => update(p, { contextLimit: n })} /></label>
             </div>
             <label className="field"><span>Address (base URL)</span><input value={p.baseUrl} onChange={(e) => update(p, { baseUrl: e.target.value.trim() })} /></label>
           </details>

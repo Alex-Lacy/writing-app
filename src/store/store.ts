@@ -6,7 +6,7 @@ import { CODEX_SCAN, CODEX_SHARE, codexBlocks, globalNotesBlocks, styleBlocks, t
 import { calibrate, currentCharsPerToken, setCharsPerToken } from '../context/tokens';
 import { friendlyError, streamChat, type ProviderError, type WireMessage } from '../providers/openai';
 import {
-  type Attachment, activeSwipe, DEFAULT_SETTINGS, FEATHERLESS_PRESET, STORY_PROMPT,
+  type Attachment, type Job, activeSwipe, DEFAULT_SETTINGS, FEATHERLESS_PRESET, STORY_PROMPT,
   type AppSettings, type Chat, type CodexBook, type HelperThread, type Message, type Suggestion, type ModelEntry, type Preset, type ProviderConfig, type Swipe,
 } from '../types';
 import { uid } from '../lib/id';
@@ -54,7 +54,8 @@ interface State {
   waiting?: string;
 }
 
-export interface RewriteTarget { messageId: string; from?: number; to?: number }
+/** `text` is the highlighted passage, found again if the message changed since (an auto fix). */
+export interface RewriteTarget { messageId: string; from?: number; to?: number; text?: string }
 
 let abort: AbortController | null = null;
 let streamingChatId: string | undefined;
@@ -164,7 +165,9 @@ export async function saveSettings(patch: Partial<AppSettings>) {
 }
 
 export async function upsertProvider(p: ProviderConfig) {
-  set({ providers: [...get().providers.filter((x) => x.id !== p.id), p] });
+  const list = get().providers;
+  // In place, so the card being typed in doesn't jump to the end.
+  set({ providers: list.some((x) => x.id === p.id) ? list.map((x) => (x.id === p.id ? p : x)) : [...list, p] });
   await repo.put('providers', p);
 }
 export async function deleteProvider(id: string) {
@@ -260,14 +263,15 @@ export async function duplicateChat(id: string, upTo?: string) {
     set({ codex: [...get().codex, copy] });
     chat.codexId = copy.id;
   }
-  const idMap = new Map<string, string>();
   const all = await repo.messages(id);
   const cut = upTo ? all.findIndex((m) => m.id === upTo) + 1 : all.length;
-  for (const m of all.slice(0, cut || all.length)) {
-    idMap.set(m.id, uid());
-    await repo.put('messages', { ...structuredClone(m), id: idMap.get(m.id)!, chatId: chat.id });
-  }
-  if (chat.summary) chat.summary = chat.summary.filter((p) => p.messageIds.every((x) => idMap.has(x))).map((p) => ({ ...p, id: uid(), messageIds: p.messageIds.map((x) => idMap.get(x)!) }));
+  const kept = all.slice(0, cut || all.length);
+  const idMap = new Map(kept.map((m) => [m.id, uid()]));
+  // A summary part cut in two by the branch is dropped, so its messages go back to full text.
+  const parts = (chat.summary ?? []).filter((p) => p.messageIds.every((x) => idMap.has(x)));
+  const covered = new Set(parts.flatMap((p) => p.messageIds));
+  for (const m of kept) await repo.put('messages', { ...structuredClone(m), id: idMap.get(m.id)!, chatId: chat.id, condensed: m.condensed && covered.has(m.id) ? true : undefined });
+  if (chat.summary) chat.summary = parts.map((p) => ({ ...p, id: uid(), messageIds: p.messageIds.map((x) => idMap.get(x)!) }));
   chat.checkedUpTo = chat.checkedUpTo && idMap.get(chat.checkedUpTo);
   await repo.put('chats', chat);
   set({ chats: sortChats([chat, ...get().chats]) });
@@ -312,10 +316,10 @@ async function appendMessage(role: Message['role'], content: string, attachments
 function historyItems(msgs: Message[], vision: boolean): HistoryItem[] {
   // Images go to the model only from the newest message that has any (each one costs ~1-3K tokens
   // on every request); older ones become a short note.
-  const lastImg = msgs.findLastIndex((m) => m.attachments?.some((a) => a.kind === 'image'));
+  const lastImg = msgs.findLast((m) => m.attachments?.some((a) => a.kind === 'image'));
   return msgs
     .filter((m) => !m.condensed)
-    .map((m) => ({ id: m.id, role: m.role, content: withAttachments(activeSwipe(m).content, m.attachments, vision && msgs.indexOf(m) === lastImg) }))
+    .map((m) => ({ id: m.id, role: m.role, content: withAttachments(activeSwipe(m).content, m.attachments, vision && m === lastImg) }))
     .filter((h) => h.content !== '');
 }
 
@@ -331,6 +335,16 @@ export function withAttachments(text: string, atts: Attachment[] | undefined, vi
 }
 
 /** Builds the exact request for the history before `uptoIndex` (exclusive). Used by generation and the context viewer. */
+let lastPreview: { key: unknown[]; result: BuildResult } | undefined;
+/** buildFor for display (top bar, dropped marks, context view): shared, and only rebuilt when an input changed. */
+export function previewFor(chat: Chat, msgs: Message[]): BuildResult {
+  const s = get();
+  const key = [chat, msgs, s.settings, s.codex, s.models, s.providers];
+  if (lastPreview && lastPreview.key.every((k, i) => k === key[i])) return lastPreview.result;
+  lastPreview = { key, result: buildFor(chat, msgs) };
+  return lastPreview.result;
+}
+
 export function buildFor(chat: Chat, msgs: Message[], opts: { continueLast?: boolean } = {}): BuildResult {
   const s = get();
   const history = historyItems(msgs, !!modelFor(chat, s)?.vision);
@@ -427,7 +441,23 @@ async function sendNow(text: string, attachments?: Attachment[]) {
  * Generates a reply. With `targetId` (an assistant message) a new swipe is added to it using
  * the history before it; otherwise a new assistant message is appended.
  */
+const JOB_NAMES: Record<Job, string> = { helper: 'Helper', proofread: 'proofread', updates: 'notes update', summary: 'summary', filter: 'cliché check', rewrite: 'rewrite' };
+let waitCancelled = false;
+/** Gives up on a reply that is waiting for a side job; the side job carries on. */
+export function cancelWait() {
+  waitCancelled = true;
+}
+
 export async function generate(targetId?: string, opts: { continueId?: string; fromSend?: boolean } = {}) {
+  try {
+    await generateNow(targetId, opts);
+  } catch (e) {
+    storyStarted(); // never leave side jobs queued behind a reply that failed to start
+    set({ error: (e as Error).message });
+  }
+}
+
+async function generateNow(targetId?: string, opts: { continueId?: string; fromSend?: boolean } = {}) {
   const chat = currentChat();
   if (!chat || get().streamingId || get().waiting || (starting && !opts.fromSend)) return;
   const model = modelFor(chat);
@@ -442,15 +472,19 @@ export async function generate(targetId?: string, opts: { continueId?: string; f
   }
 
   // Let a running side job finish (or stop a background one) so the plan's allowance is free.
-  if (jobRunning()) set({ waiting: `Waiting for ${get().jobs[0]?.label ?? 'a side job'} to finish…` });
+  const busy = jobRunning();
+  if (busy) set({ waiting: `Waiting for the ${JOB_NAMES[busy]} to finish…` });
+  waitCancelled = false;
   try {
-    await makeRoomForStory();
+    await makeRoomForStory(() => waitCancelled);
   } finally {
     set({ waiting: undefined });
   }
-  if (get().streamingId) return storyStarted();
-
+  if (get().streamingId || waitCancelled) return storyStarted();
+  // While waiting, the person may have switched story or deleted the message this was for.
   const all = get().messages;
+  if (get().currentChatId !== chat.id || (targetId && !all.some((m) => m.id === targetId)) || (opts.continueId && !all.some((m) => m.id === opts.continueId))) return storyStarted();
+
   let target: Message;
   let history: Message[];
   const cont = opts.continueId ? all.find((m) => m.id === opts.continueId) : undefined;
@@ -671,8 +705,9 @@ export async function deleteFrom(id: string) {
   for (const m of gone) await repo.del('messages', m.id);
 }
 
-export async function insertMessage(role: Message['role'], content: string) {
-  await appendMessage(role, content);
+export async function insertMessage(role: Message['role'], content: string, attachments?: Attachment[]) {
+  if (!currentChat()) await newChat();
+  await appendMessage(role, content, attachments);
 }
 
 export const ui = {

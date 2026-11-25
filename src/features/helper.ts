@@ -32,18 +32,23 @@ export function splitReply(text: string): { say: string; changes: Proposal[] } {
   return { say: text.replace(m[0], '').trim(), changes };
 }
 
-function threadFor(chatId: string, helperId: string): HelperThread {
-  return useStore.getState().helperThreads.find((t) => t.chatId === chatId && t.helperId === helperId) ?? { id: uid(), chatId, helperId, messages: [], updatedAt: Date.now() };
+/** The thread from the open story, else from storage (the person may have switched story). */
+async function threadFor(chatId: string, helperId: string): Promise<HelperThread> {
+  const s = useStore.getState();
+  const mine = (t: HelperThread) => t.helperId === helperId;
+  const found = chatId === s.currentChatId ? s.helperThreads.find((t) => t.chatId === chatId && mine(t)) : (await repo.byChat('helperThreads', chatId)).find(mine);
+  return found ?? { id: uid(), chatId, helperId, messages: [], updatedAt: Date.now() };
 }
 
 async function saveThread(t: HelperThread) {
   const next = { ...t, updatedAt: Date.now() };
-  useStore.setState({ helperThreads: [...useStore.getState().helperThreads.filter((x) => x.id !== t.id), next] });
+  const s = useStore.getState();
+  if (t.chatId === s.currentChatId) useStore.setState({ helperThreads: [...s.helperThreads.filter((x) => x.id !== t.id), next] });
   await repo.put('helperThreads', next);
 }
 
 export async function clearThread(chatId: string, helperId: string) {
-  const t = threadFor(chatId, helperId);
+  const t = await threadFor(chatId, helperId);
   useStore.setState({ helperThreads: useStore.getState().helperThreads.filter((x) => x.id !== t.id) });
   await repo.del('helperThreads', t.id);
 }
@@ -54,7 +59,7 @@ export async function askHelper(chatId: string, helperId: string, text: string, 
   const chat = s.chats.find((c) => c.id === chatId);
   const helper = helpersList().find((h) => h.id === helperId);
   if (!chat || !helper || !text.trim()) return;
-  let thread = threadFor(chatId, helperId);
+  let thread = await threadFor(chatId, helperId);
   thread = { ...thread, messages: [...thread.messages, { role: 'user', content: text.trim(), createdAt: Date.now() }] };
   await saveThread(thread);
 
@@ -85,6 +90,6 @@ export async function askHelper(chatId: string, helperId: string, text: string, 
   const { say, changes } = splitReply(res.text);
   const fresh = useStore.getState().chats.find((c) => c.id === chatId) ?? chat;
   const cards = await addSuggestions(chatId, toSuggestions(fresh, changes, 'helper'));
-  thread = threadFor(chatId, helperId);
+  thread = await threadFor(chatId, helperId);
   await saveThread({ ...thread, messages: [...thread.messages, { role: 'assistant', content: say || (cards.length ? 'Here are my suggestions.' : '…'), suggestionIds: cards.map((c) => c.id), createdAt: Date.now() }] });
 }

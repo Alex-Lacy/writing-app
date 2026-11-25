@@ -35,8 +35,22 @@ async function bookId(chat: Chat, id: string) {
   return id === OWN_BOOK ? (await ownBook(chat)).id : id;
 }
 
+/** Cards being accepted or undone right now, so a double tap doesn't apply one twice. */
+const busy = new Set<string>();
+async function once(id: string, fn: () => Promise<void>) {
+  if (busy.has(id)) return;
+  busy.add(id);
+  try {
+    await fn();
+  } finally {
+    busy.delete(id);
+  }
+}
+
 /** Applies a suggestion. `edited` replaces the proposed text (the person's Edit). */
-export async function accept(id: string, edited?: string) {
+export const accept = (id: string, edited?: string) => once(id, () => acceptNow(id, edited));
+
+async function acceptNow(id: string, edited?: string) {
   const x = get().suggestions.find((s) => s.id === id) ?? (await repo.get('suggestions', id));
   const chat = x && chatOf(x.chatId);
   if (!x || !chat || x.status !== 'pending') return;
@@ -141,12 +155,33 @@ export async function reject(id: string) {
 }
 
 /** Reverses an accepted suggestion. */
-export async function undo(id: string) {
+export const undo = (id: string) => once(id, () => undoNow(id));
+
+/** What the accepted card's field holds now, if someone could have typed over it since. */
+function currentValue(chat: Chat, t: Suggestion['target']): string | undefined {
+  switch (t.kind) {
+    case 'system': return chat.systemPrompt ?? '';
+    case 'title': return chat.title;
+    case 'background':
+    case 'steering': return chat.writing[t.kind] ?? '';
+    case 'tags': return (chat.tags ?? []).join('; ');
+    case 'style-edit': return get().settings.styles?.find((m) => m.id === t.styleId)?.text;
+  }
+  return undefined;
+}
+
+async function undoNow(id: string) {
   const x = get().suggestions.find((s) => s.id === id);
   const chat = x && chatOf(x.chatId);
   if (!x || !chat || x.status !== 'accepted') return;
   const t = x.target;
   const u = x.undo as never;
+  const now = currentValue(chat, t);
+  const expected = t.kind === 'tags' ? parseTags(x.after ?? '').join('; ') : (x.after ?? '');
+  if (now !== undefined && now !== expected) {
+    set({ error: 'Couldn’t undo: that was edited after the card was accepted. Change it by hand instead.' });
+    return;
+  }
   switch (t.kind) {
     case 'system':
       await updateChat({ systemPrompt: u }, chat.id);
@@ -177,7 +212,12 @@ export async function undo(id: string) {
       break;
     }
     case 'summary': {
-      const { summary, condensed } = u as { summary: SummaryPart[]; condensed: string[] };
+      // Take out only this part (putting back any it replaced); parts added since stay.
+      const { summary: prev, condensed } = u as { summary: SummaryPart[]; condensed: string[] };
+      const replaced = prev.filter((p) => t.replaces?.includes(p.id));
+      const cur = chat.summary ?? [];
+      const at = cur.findIndex((p) => p.id === t.part.id);
+      const summary = at < 0 ? cur : [...cur.slice(0, at), ...replaced, ...cur.slice(at + 1)];
       await setCondensedIds(chat.id, condensed, false);
       await updateChat({ summary }, chat.id);
       break;

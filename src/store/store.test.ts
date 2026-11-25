@@ -159,4 +159,15 @@ describe('branch', () => {
     expect(s.chats.find((x) => x.id === s.currentChatId)?.title).toContain('(branch)');
     expect(s.messages.map((m) => m.swipes[0].content)).toEqual(['one', 'two']);
   });
+  it('a summary part cut by the branch is dropped and its messages come back', async () => {
+    const c = await newChat();
+    for (const t of ['one', 'two', 'three']) await insertMessage('user', t);
+    const [a, b, d] = useStore.getState().messages;
+    for (const m of [a, b, d]) await repo.put('messages', { ...m, condensed: true });
+    await updateChat({ summary: [{ id: 's1', messageIds: [a.id, b.id, d.id], text: 'sum', createdAt: 0 }] }, c.id);
+    await duplicateChat(c.id, b.id);
+    const s = useStore.getState();
+    expect(s.chats.find((x) => x.id === s.currentChatId)?.summary).toEqual([]);
+    expect(s.messages.some((m) => m.condensed)).toBe(false);
+  });
 });

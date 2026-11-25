@@ -1,3 +1,4 @@
+import { NumberInput } from '../NumberInput';
 import { useState } from 'react';
 import { estimateTokens } from '../../context/tokens';
 import { uid } from '../../lib/id';
@@ -82,7 +83,7 @@ export function SetupTab() {
           <div className="grid2">
             <label className="field num">
               <span>Messages back</span>
-              <input type="number" min={1} step={1} value={w.steeringDepth} onChange={(e) => setW({ steeringDepth: Math.max(1, Number(e.target.value) || 1) })} />
+              <NumberInput min={1} step={1} fallback={1} value={w.steeringDepth} onChange={(n) => setW({ steeringDepth: Math.round(n) })} />
             </label>
             <label className="field num">
               <span>Insert as</span>
