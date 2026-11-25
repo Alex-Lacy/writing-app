@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { estimateTokens } from '../../context/tokens';
 import { uid } from '../../lib/id';
-import { currentChat, saveSettings, updateChat, upsertPreset, useStore } from '../../store/store';
+import { currentChat, DEFAULT_UPDATES_EVERY, saveSettings, updateChat, upsertPreset, useStore } from '../../store/store';
 import type { GenParams, WritingSettings } from '../../types';
 import { SummarySection } from './SummarySection';
 import { TagsSection } from './TagsSection';
@@ -45,16 +46,73 @@ export function SetupTab() {
   const chat = useStore((s) => currentChat(s));
   const presets = useStore((s) => s.presets);
   const globalNotes = useStore((s) => s.settings.globalNotes);
+  const [saved, setSaved] = useState(false);
   if (!chat) return null;
 
   const setParams = (p: Partial<GenParams>) => updateChat({ params: { ...chat.params, ...p } });
   const setW = (p: Partial<WritingSettings>) => updateChat({ writing: { ...chat.writing, ...p } });
   const w = chat.writing;
 
+  const saveDefaults = async () => {
+    await saveSettings({
+      defaultSystemPrompt: chat.systemPrompt,
+      defaultWriting: { ...w, enabled: true, background: '', steering: '' },
+      defaultParams: chat.params,
+      defaultAutoSummary: chat.autoSummary !== false,
+      defaultUpdatesEvery: chat.updatesEvery ?? DEFAULT_UPDATES_EVERY,
+    });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  };
+
   return (
     <div className="panel-body">
+      <div className="wt-block src-background">
+        <div className="wt-head"><b>Background</b> <em className="muted small">~{estimateTokens(w.background)} tokens</em></div>
+        <p className="muted small">Always sent, at the top. For what's always true: premise, characters, setting, style.</p>
+        <textarea rows={7} value={w.background} onChange={(e) => setW({ background: e.target.value })} placeholder="Story premise, characters, setting, style…" />
+      </div>
+
+      <div className="wt-block src-steering">
+        <div className="wt-head"><b>Steering</b> <em className="muted small">~{estimateTokens(w.steering)} tokens</em></div>
+        <p className="muted small">Sent just before each reply, so it pulls hardest on what comes next: tone, pacing, focus, point of view. Keep it short.</p>
+        <textarea rows={4} value={w.steering} onChange={(e) => setW({ steering: e.target.value })} placeholder="[Style: vivid, slow-burn. Focus on Mara's POV.]" />
+        <details>
+          <summary className="muted small">Where it goes</summary>
+          <div className="grid2">
+            <label className="field num">
+              <span>Messages back</span>
+              <input type="number" min={1} step={1} value={w.steeringDepth} onChange={(e) => setW({ steeringDepth: Math.max(1, Number(e.target.value) || 1) })} />
+            </label>
+            <label className="field num">
+              <span>Insert as</span>
+              <select value={w.steeringMode} onChange={(e) => setW({ steeringMode: e.target.value as WritingSettings['steeringMode'] })}>
+                <option value="inline">Inside the message (recommended)</option>
+                <option value="system">Separate system message</option>
+              </select>
+            </label>
+          </div>
+          <p className="muted small">
+            1 = with your latest message (strongest); higher numbers sit further back and pull less. <b>Inside the
+            message</b> works with every model; some (DeepSeek, for one) move separate system messages to the top,
+            which weakens the note.
+          </p>
+        </details>
+      </div>
+      <StyleToggles />
+      <TagsSection />
+
       <section>
-        <h3>System prompt</h3>
+        <label className="switch" title="Global notes are written in the Library and go into every story that has this on.">
+          <input type="checkbox" checked={chat.globalNotes !== false} onChange={(e) => updateChat({ globalNotes: e.target.checked })} /> Include Global notes
+        </label>
+        <p className="muted small">{globalNotes?.trim() ? `~${estimateTokens(globalNotes)} tokens, edited in the Library.` : 'No Global notes yet. Add them in the Library (sidebar).'}</p>
+      </section>
+
+      <SummarySection />
+
+      <details className="section">
+        <summary><b>System prompt</b> <span className="muted small">the AI's role and rules</span></summary>
         <div className="row">
           <select
             value={chat.presetId ?? ''}
@@ -67,74 +125,12 @@ export function SetupTab() {
             {presets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <button className="ghost small" onClick={() => {
-            const name = prompt('Save system prompt as preset named:');
+            const name = prompt('Save this system prompt as a preset named:');
             if (name) { const p = { id: uid(), name, systemPrompt: chat.systemPrompt }; upsertPreset(p); updateChat({ presetId: p.id }); }
           }}>Save as preset</button>
         </div>
         <textarea rows={6} value={chat.systemPrompt} onChange={(e) => updateChat({ systemPrompt: e.target.value, presetId: undefined })} />
-        <button className="ghost small" onClick={() => saveSettings({ defaultSystemPrompt: chat.systemPrompt })}>Use as default for new chats</button>
-      </section>
-
-      <section>
-        <h3>
-          <label className="switch">
-            <input type="checkbox" checked={w.enabled} onChange={(e) => setW({ enabled: e.target.checked })} /> Writing tools
-          </label>
-        </h3>
-        <fieldset disabled={!w.enabled} className={w.enabled ? '' : 'dim'}>
-          <div className="wt-block src-background">
-            <div className="wt-head"><b>Background</b> <em className="muted small">~{estimateTokens(w.background)} tokens</em></div>
-            <p className="muted small">Always placed at the very top of the context, right after the system prompt. Use it for the things that are always true: premise, characters, setting, style.</p>
-            <textarea rows={7} value={w.background} onChange={(e) => setW({ background: e.target.value })} placeholder="Story premise, characters, setting, style…" />
-          </div>
-
-          <div className="wt-block src-steering">
-            <div className="wt-head"><b>Steering</b> <em className="muted small">~{estimateTokens(w.steering)} tokens</em></div>
-            <p className="muted small">
-              Placed near the end of the context, so it has a stronger, more immediate effect than Background. Use it for
-              what should steer the next replies: tone, pacing, focus, POV.
-            </p>
-            <textarea rows={4} value={w.steering} onChange={(e) => setW({ steering: e.target.value })} placeholder="[Style: vivid, slow-burn. Focus on Mara's POV.]" />
-            <div className="grid2">
-              <label className="field num">
-                <span>Insert depth</span>
-                <input type="number" min={1} step={1} value={w.steeringDepth} onChange={(e) => setW({ steeringDepth: Math.max(1, Number(e.target.value) || 1) })} />
-              </label>
-              <label className="field num">
-                <span>Insert as</span>
-                <select value={w.steeringMode} onChange={(e) => setW({ steeringMode: e.target.value as WritingSettings['steeringMode'] })}>
-                  <option value="inline">Inside the message (recommended)</option>
-                  <option value="system">Separate system message</option>
-                </select>
-              </label>
-            </div>
-            <p className="muted small">
-              <b>Depth</b> is how many messages back from the latest one the note goes. 1 = with your latest message
-              (strongest). Higher numbers sit further back and pull less. <b>Inside the message</b> works with every
-              model; some models (DeepSeek, for one) move separate system messages to the top, which weakens the note.
-            </p>
-          </div>
-          <button
-            className="ghost small"
-            title="New chats will start with Writing tools on or off as they are here, and with this Steering depth and placement. The Background and Steering text are not copied."
-            onClick={() => saveSettings({ defaultWriting: { ...w, background: '', steering: '' } })}
-          >
-            Make these the defaults for new chats
-          </button>
-          <p className="muted small">Saves the on/off switch and the Steering depth and placement, not the text you wrote.</p>
-        </fieldset>
-      </section>
-      <StyleToggles />
-      <TagsSection />
-
-      <section>
-        <label className="switch" title="Global notes are written in the Library and go into every chat that has this on.">
-          <input type="checkbox" checked={chat.globalNotes !== false} onChange={(e) => updateChat({ globalNotes: e.target.checked })} /> Include Global notes
-        </label>
-        <p className="muted small">{globalNotes?.trim() ? `~${estimateTokens(globalNotes)} tokens, edited in the Library.` : 'No Global notes yet. Add them in the Library (sidebar).'}</p>
-      </section>
-
-      <SummarySection />
+      </details>
 
       <details className="section">
         <summary><b>Generation settings</b> <span className="muted small">temperature, samplers, hard cap</span></summary>
@@ -152,8 +148,11 @@ export function SetupTab() {
           Reply size comes from the <b>Length</b> option above the message box. Replies may use all the context that is
           left, so thinking models aren't cut off; set a hard cap only if you want an absolute limit.
         </p>
-        <button className="ghost small" onClick={() => saveSettings({ defaultParams: chat.params })}>Use as default for new chats</button>
       </details>
+
+      <button className="ghost small" onClick={saveDefaults} title="New stories start with this system prompt, Steering placement, generation settings, Auto-summary and update settings. Your Background and Steering text aren't copied.">
+        {saved ? 'Saved' : 'Use these settings for new stories'}
+      </button>
 
     </div>
   );

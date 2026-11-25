@@ -122,7 +122,7 @@ const sourceOf = (b: ContextBlock): Source =>
 
 /** Contributor for the writing toggle: Background and Steering. */
 export function writingBlocks(w: WritingSettings | undefined): ContextBlock[] {
-  if (!w?.enabled) return [];
+  if (!w) return [];
   const out: ContextBlock[] = [];
   if (w.background.trim()) out.push({ id: 'background', label: 'Background', text: w.background.trim(), placement: { kind: 'top', order: 10 }, source: 'background' });
   if (w.steering.trim())

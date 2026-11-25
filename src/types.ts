@@ -272,6 +272,9 @@ export interface Message {
   condensed?: boolean;
 }
 
+/** The starting system prompt: a co-writer, not a chatbot. */
+export const STORY_PROMPT = `You are a skilled novelist co-writing a story with the user. Continue the story from where it left off, in the established voice, tense and point of view. Write vivid, specific prose with natural dialogue, and let characters act on their own motives. Don't summarise, moralise or wrap things up; end each reply at a natural point that leaves room for what comes next. Don't write the user's own character's words or choices unless asked.`;
+
 export interface AppSettings {
   activeProviderId?: string;
   defaultModelKey?: string;
@@ -328,7 +331,7 @@ export const DEFAULT_PARAMS: GenParams = { maxTokens: 2048, temperature: 0.8 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
   defaultParams: DEFAULT_PARAMS,
-  defaultSystemPrompt: 'You are a helpful assistant.',
+  defaultSystemPrompt: STORY_PROMPT,
   defaultWriting: DEFAULT_WRITING,
   safetyMargin: 256,
   enterToSend: true,

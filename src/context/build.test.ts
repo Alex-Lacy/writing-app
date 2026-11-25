@@ -17,8 +17,9 @@ describe('buildContext', () => {
     expect(r.messages).toHaveLength(3);
   });
 
-  it('ignores writing blocks when the toggle is off', () => {
-    expect(writingBlocks({ ...DEFAULT_WRITING, background: 'MEM', steering: 'AN' })).toEqual([]);
+  it('sends Background and Steering whenever they have text (there is no on/off switch)', () => {
+    expect(writingBlocks({ ...DEFAULT_WRITING, enabled: false, background: 'MEM', steering: 'AN' }).map((b) => b.id)).toEqual(['background', 'steering']);
+    expect(writingBlocks({ ...DEFAULT_WRITING, background: ' ', steering: '' })).toEqual([]);
   });
 
   it("inserts the Steering just before the latest message at depth 1", () => {

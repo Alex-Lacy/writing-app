@@ -13,15 +13,15 @@ export function Sidebar() {
       {open && <div className="scrim" onClick={() => ui.toggleSidebar(false)} />}
       <aside className={`sidebar${open ? ' open' : ''}`}>
         <div className="sidebar-top">
-          <button className="primary wide" title="Starts a new chat and opens the New story Helper. Just type in the chat instead if you don't want help." onClick={async () => { await newChat(); ui.openHelper('helper-new-story'); }}>+ New story</button>
-          <input placeholder="Filter chats" value={q} onChange={(e) => setQ(e.target.value)} />
+          <button className="primary wide" title="Starts a new story and opens the New story Helper. Or just start typing if you don't want help." onClick={async () => { await newChat(); ui.openHelper('helper-new-story'); }}>+ New story</button>
+          <input placeholder="Find a story" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <nav className="chat-list">
           {shown.map((c) => (
             <div key={c.id} className={`chat-item${c.id === currentId ? ' active' : ''}`} onClick={() => selectChat(c.id)}>
               <span className="chat-title"><span className="chat-num">#{c.num}</span> {c.title}</span>
               <span className="chat-item-actions" onClick={(e) => e.stopPropagation()}>
-                <button className="icon" title="Rename" onClick={() => { const t = prompt('Rename chat', c.title); if (t) updateChat({ title: t }, c.id); }}>✏️</button>
+                <button className="icon" title="Rename" onClick={() => { const t = prompt('Rename story', c.title); if (t) updateChat({ title: t }, c.id); }}>✏️</button>
                 <button className="icon" title="Duplicate" onClick={() => duplicateChat(c.id)}>⧉</button>
                 <button className="icon" title="Delete" onClick={() => confirm(`Delete "${c.title}"?`) && deleteChat(c.id)}>🗑</button>
               </span>

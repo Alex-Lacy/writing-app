@@ -6,7 +6,7 @@ import { CODEX_SCAN, CODEX_SHARE, codexBlocks, globalNotesBlocks, styleBlocks, t
 import { calibrate, currentCharsPerToken, setCharsPerToken } from '../context/tokens';
 import { friendlyError, streamChat, type ProviderError, type WireMessage } from '../providers/openai';
 import {
-  type Attachment, activeSwipe, DEFAULT_SETTINGS, FEATHERLESS_PRESET,
+  type Attachment, activeSwipe, DEFAULT_SETTINGS, FEATHERLESS_PRESET, STORY_PROMPT,
   type AppSettings, type Chat, type CodexBook, type HelperThread, type Message, type Suggestion, type ModelEntry, type Preset, type ProviderConfig, type Swipe,
 } from '../types';
 import { uid } from '../lib/id';
@@ -141,6 +141,8 @@ async function doInit() {
   s.activeProviderId ??= provs[0].id;
   setCharsPerToken(s.charsPerToken);
   if (!s.styles) s.styles = STARTER_STYLES;
+  // The old chatbot default becomes the story default (only if it was never changed).
+  if (s.defaultSystemPrompt === 'You are a helpful assistant.') s.defaultSystemPrompt = STORY_PROMPT;
   // Chat numbers (#1, #2…), oldest first, for chats made before numbers existed.
   if (allChats.some((c) => !c.num)) {
     let n = s.nextChatNum ?? 1;
@@ -197,7 +199,7 @@ export async function newChat(): Promise<Chat> {
   const cur = currentChat();
   const chat: Chat = {
     id: uid(),
-    title: 'New chat',
+    title: 'New story',
     createdAt: Date.now(),
     updatedAt: Date.now(),
     modelKey: cur?.modelKey ?? s.defaultModelKey,
@@ -416,7 +418,7 @@ async function sendNow(text: string, attachments?: Attachment[]) {
   if (!chat) chat = await newChat();
   if (text.trim() || attachments?.length) {
     await appendMessage('user', text, attachments);
-    if (chat.title === 'New chat' && text.trim()) await updateChat({ title: text.trim().replace(/\s+/g, ' ').slice(0, 60) });
+    if ((chat.title === 'New story' || chat.title === 'New chat') && text.trim()) await updateChat({ title: text.trim().replace(/\s+/g, ' ').slice(0, 60) });
   }
   await generate(undefined, { fromSend: true });
 }

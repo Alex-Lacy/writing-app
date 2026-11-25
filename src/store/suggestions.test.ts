@@ -52,9 +52,9 @@ describe('suggestions', () => {
     expect(useStore.getState().codex.find((b) => b.id === chat().codexId)!.entries).toEqual([]);
   });
   it('reject leaves things alone', async () => {
-    const [x] = await addSuggestions(chat().id, [{ source: 'helper', target: { kind: 'title' }, before: 'New chat', after: 'Other' }]);
+    const [x] = await addSuggestions(chat().id, [{ source: 'helper', target: { kind: 'title' }, before: 'New story', after: 'Other' }]);
     await reject(x.id);
-    expect(chat().title).toBe('New chat');
+    expect(chat().title).toBe('New story');
     expect(useStore.getState().suggestions[0].status).toBe('rejected');
   });
 });

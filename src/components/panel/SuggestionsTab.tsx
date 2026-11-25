@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { checkForUpdates } from '../../features/updates';
-import { currentChat, DEFAULT_UPDATES_EVERY, saveSettings, updateChat, useStore } from '../../store/store';
+import { currentChat, DEFAULT_UPDATES_EVERY, updateChat, useStore } from '../../store/store';
 import { acceptAll } from '../../store/suggestions';
 import { SuggestionCard } from './SuggestionCard';
 
@@ -49,7 +49,6 @@ export function SuggestionsTab() {
         </label>
         <div className="row">
           <button className="small" disabled={busy} onClick={runNow}>{busy ? 'Checking…' : 'Update notes now'}</button>
-          <button className="small ghost" onClick={() => saveSettings({ defaultUpdatesEvery: every })} title="New chats start with this setting">Use for new chats</button>
         </div>
         {note && <p className="muted small">{note}</p>}
       </section>

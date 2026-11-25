@@ -105,7 +105,7 @@ export const MessageItem = memo(function MessageItem({ m, isLast, outOfContext }
         ) : (
           <div className="msg-note">
             Ran out of room while thinking, before writing a reply. Press Retry: replies can now use all the space left in
-            the context. If it keeps happening, raise "Reply room" in chat settings.
+            the context. If it keeps happening, set a hard cap in the Story panel, Setup, Generation settings.
           </div>
         )
       )}

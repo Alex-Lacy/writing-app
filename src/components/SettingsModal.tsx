@@ -146,7 +146,7 @@ function Models() {
             <option value="optional">Thinking optional</option>
             <option value="always">Always thinks</option>
           </select>
-          <label className="small" title="Default model for new chats"><input type="radio" checked={defaultKey === m.key} onChange={() => saveSettings({ defaultModelKey: m.key })} /> default</label>
+          <label className="small" title="Default model for new stories"><input type="radio" checked={defaultKey === m.key} onChange={() => saveSettings({ defaultModelKey: m.key })} /> default</label>
           <button className="icon" onClick={() => deleteModel(m.key)} title="Remove">✕</button>
         </div>
       ))}
@@ -218,7 +218,7 @@ function Presets() {
   const presets = useStore((s) => s.presets);
   return (
     <div>
-      <p className="muted small">Saved system prompts. Pick one per chat from the chat settings panel.</p>
+      <p className="muted small">Saved system prompts. Pick one per story in the Story panel, Setup, System prompt.</p>
       {presets.map((p) => (
         <div key={p.id} className="card">
           <div className="row">
@@ -237,11 +237,10 @@ function General() {
   const s = useStore((x) => x.settings);
   return (
     <div>
-      <label className="field"><span>Default system prompt for new chats</span>
+      <label className="field"><span>System prompt for new stories</span>
         <textarea rows={4} value={s.defaultSystemPrompt} onChange={(e) => saveSettings({ defaultSystemPrompt: e.target.value })} />
       </label>
       <label className="switch"><input type="checkbox" checked={s.enterToSend} onChange={(e) => saveSettings({ enterToSend: e.target.checked })} /> Enter sends (Shift+Enter for newline; always off on touch screens)</label>
-      <label className="switch"><input type="checkbox" checked={s.defaultWriting.enabled} onChange={(e) => saveSettings({ defaultWriting: { ...s.defaultWriting, enabled: e.target.checked } })} /> Writing tools on by default for new chats</label>
       <label className="field num"><span>Context safety margin (tokens)</span>
         <input type="number" value={s.safetyMargin} onChange={(e) => saveSettings({ safetyMargin: Math.max(0, Number(e.target.value) || 0) })} />
       </label>

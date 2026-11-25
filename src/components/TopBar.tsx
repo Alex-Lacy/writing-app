@@ -20,7 +20,7 @@ export function TopBar() {
 
   return (
     <header className="topbar">
-      <button className="icon menu" onClick={() => ui.toggleSidebar()} title="Show or hide the chat list">☰</button>
+      <button className="icon menu" onClick={() => ui.toggleSidebar()} title="Show or hide the story list">☰</button>
       <select
         className="model-picker"
         value={models.some((m) => m.key === value) ? value : ''}
@@ -46,11 +46,6 @@ export function TopBar() {
           <div className="meter-bar"><div style={{ width: `${pct}%` }} /></div>
           <span>{(used / 1000).toFixed(1)}k/{Math.round(limit / 1000)}k</span>
         </div>
-      )}
-      {chat && (
-        <button className={`toggle${chat.writing.enabled ? ' on' : ''}`} onClick={() => updateChat({ writing: { ...chat.writing, enabled: !chat.writing.enabled } })} title="Writing tools (Background, Steering)">
-          ✎<span className="label"> Writing</span>
-        </button>
       )}
       {chat && (
         <button className={`toggle small${chat.autoSummary !== false ? ' on' : ''}`} onClick={() => updateChat({ autoSummary: chat.autoSummary === false })} title="Auto-summary: when the story nears the context limit, older messages are summarised so nothing important falls out. Click to switch.">

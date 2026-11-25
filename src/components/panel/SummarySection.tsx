@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { editPart, refreshPart, summariseNext, unsummarise } from '../../features/summary';
 import { estimateTokens } from '../../context/tokens';
-import { currentChat, saveSettings, updateChat, useStore } from '../../store/store';
+import { currentChat, updateChat, useStore } from '../../store/store';
 
 /** Auto-summary: the switch, and the summary parts with edit, refresh and un-summarise. */
 export function SummarySection() {
@@ -70,7 +70,6 @@ export function SummarySection() {
       ))}
       <div className="row">
         <button className="small ghost" disabled={busy} onClick={now}>{busy ? 'Summarising…' : 'Summarise older story now'}</button>
-        <button className="small ghost" onClick={() => saveSettings({ defaultAutoSummary: on })}>Use for new chats</button>
       </div>
       {msg && <p className="muted small">{msg}</p>}
     </section>
