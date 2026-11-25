@@ -9,3 +9,4 @@ html = html
   .replace(/<link rel="apple-touch-icon"[^>]*>\s*/, '');
 fs.writeFileSync('dist-single/Writing Studio.html', html);
 console.log('wrote dist-single/Writing Studio.html');
+fs.rmSync('dist-single/sw.js', { force: true });

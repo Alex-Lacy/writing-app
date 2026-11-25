@@ -1,0 +1,15 @@
+import { chromium } from 'playwright-core';
+const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const ctx = await b.newContext();
+const p = await ctx.newPage();
+await p.goto('http://localhost:4173/');
+await p.waitForFunction(() => navigator.serviceWorker.controller || navigator.serviceWorker.ready.then(() => true));
+await p.waitForTimeout(1000);
+await p.reload();
+await p.waitForTimeout(800);
+console.log('controlled:', await p.evaluate(() => !!navigator.serviceWorker.controller));
+await ctx.setOffline(true);
+await p.reload();
+await p.waitForSelector('.app, .modal', { timeout: 8000 });
+console.log('offline load ok:', await p.title());
+await b.close();
