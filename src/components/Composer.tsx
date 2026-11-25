@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { LENGTH_BUCKETS, LENGTH_ORDER, type LengthBucket } from '../context/length';
 import { currentChat, insertMessage, modelFor, send, stop, updateChat, useStore } from '../store/store';
-import type { ThinkingMode } from '../types';
+import type { Attachment, ThinkingMode } from '../types';
+import { readAttachment } from '../lib/attach';
 
 export function Composer() {
   const streaming = useStore((s) => !!s.streamingId);
@@ -11,6 +12,8 @@ export function Composer() {
   const chat = useStore((s) => currentChat(s));
   const model = useStore((s) => modelFor(currentChat(s), s));
   const [text, setText] = useState('');
+  const [atts, setAtts] = useState<Attachment[]>([]);
+  const file = useRef<HTMLInputElement>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -25,8 +28,10 @@ export function Composer() {
   const submit = () => {
     if (streaming || waiting) return;
     const t = text;
+    const a = atts;
     setText('');
-    void send(t);
+    setAtts([]);
+    void send(t, a);
   };
 
   const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
@@ -54,13 +59,47 @@ export function Composer() {
           )}
         </div>
       )}
+    {atts.length > 0 && (
+      <div className="attach-row">
+        {atts.map((a) => (
+          <span key={a.id} className="attach">
+            {a.kind === 'image' ? <img src={a.dataUrl} alt="" /> : <span>📄</span>}
+            <span className="attach-name">{a.name}</span>
+            <button className="icon" title="Remove" onClick={() => setAtts(atts.filter((x) => x.id !== a.id))}>×</button>
+          </span>
+        ))}
+        {atts.some((a) => a.kind === 'image') && model?.vision !== true && <span className="muted small">This model may not be able to see images; pick one marked Vision.</span>}
+      </div>
+    )}
     <div className="composer">
+      <input
+        ref={file} type="file" multiple hidden accept="image/*,text/*,.md,.txt,.json,.csv"
+        onChange={async (e) => {
+          const files = [...(e.target.files ?? [])];
+          e.target.value = '';
+          for (const f of files) {
+            try {
+              const a = await readAttachment(f);
+              setAtts((x) => [...x, a]);
+            } catch (err) {
+              useStore.setState({ error: (err as Error).message });
+            }
+          }
+        }}
+      />
+      <button className="icon attach-btn" title="Attach images or text files" onClick={() => file.current?.click()} disabled={streaming}>📎</button>
       <textarea
         ref={ta}
         value={text}
         rows={1}
         placeholder={waiting ?? (streaming ? 'Generating…' : 'Message (empty to just generate)')}
         onChange={(e) => setText(e.target.value)}
+        onPaste={(e) => {
+          const imgs = [...e.clipboardData.files].filter((f) => f.type.startsWith('image/'));
+          if (!imgs.length) return;
+          e.preventDefault();
+          for (const f of imgs) void readAttachment(f).then((a) => setAtts((x) => [...x, a]));
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey && enterToSend && !coarse && !e.nativeEvent.isComposing) {
             e.preventDefault();

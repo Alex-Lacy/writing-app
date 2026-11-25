@@ -300,3 +300,12 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .tag-input { flex: 1; min-width: 120px; width: auto; }
 .tag-ideas { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; }
 .tag-ideas .chip { cursor: pointer; }
+.attach-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
+.attach { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg2); font-size: 12px; max-width: 220px; }
+.attach img { height: 36px; width: 36px; object-fit: cover; border-radius: 4px; }
+.attach.big img { height: auto; width: auto; max-height: 220px; max-width: 220px; }
+.attach.file { display: block; max-width: 100%; }
+.attach.file pre { max-height: 200px; overflow: auto; white-space: pre-wrap; font-size: 12px; }
+.attach-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attach .icon { border: none; padding: 0 4px; }
+.attach-btn { align-self: flex-end; }

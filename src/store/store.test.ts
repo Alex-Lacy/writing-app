@@ -13,7 +13,7 @@ vi.mock('../providers/openai', async (orig) => ({
   },
 }));
 
-const { useStore, newChat, send, continueReply, deleteChat, selectChat, updateChat, SAVE_EVERY_MS } = await import('./store');
+const { useStore, newChat, send, continueReply, deleteChat, selectChat, updateChat, SAVE_EVERY_MS, withAttachments } = await import('./store');
 const { repo } = await import('../db/db');
 
 const words = (text: string): (() => AsyncGenerator<StreamEvent>) => async function* () {
@@ -128,5 +128,20 @@ describe('saving while streaming', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('attachments', () => {
+  const atts = [
+    { id: 'a', kind: 'image' as const, name: 'map.jpg', mime: 'image/jpeg', dataUrl: 'data:image/jpeg;base64,AAAA' },
+    { id: 'b', kind: 'file' as const, name: 'notes.md', mime: 'text/markdown', text: 'Rell is the captain.' },
+  ];
+  it('sends images as parts to vision models and text files inline', () => {
+    const c = withAttachments('Look', atts, true);
+    expect(Array.isArray(c)).toBe(true);
+    expect(c).toEqual([{ type: 'text', text: '[Attached file: notes.md]\nRell is the captain.\n[End of notes.md]\n\nLook' }, { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,AAAA' } }]);
+  });
+  it('tells other models an image was left out', () => {
+    expect(withAttachments('', atts, false)).toContain("[Image attached: map.jpg, not shown because this model can't see images]");
   });
 });

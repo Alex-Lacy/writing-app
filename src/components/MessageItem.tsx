@@ -80,6 +80,15 @@ export const MessageItem = memo(function MessageItem({ m, isLast, outOfContext }
         <div ref={body} className="msg-body markdown" dangerouslySetInnerHTML={{ __html: html || (streaming && !sw.reasoning ? '<span class="cursor">▍</span>' : '') }} />
       )}
 
+      {m.attachments?.length ? (
+        <div className="attach-row">
+          {m.attachments.map((a) => (
+            a.kind === 'image'
+              ? <a key={a.id} href={a.dataUrl} target="_blank" rel="noreferrer" className="attach big"><img src={a.dataUrl} alt={a.name} /></a>
+              : <details key={a.id} className="attach file"><summary>📄 {a.name}</summary><pre>{a.text?.slice(0, 4000)}</pre></details>
+          ))}
+        </div>
+      ) : null}
       {sw.error && <div className="msg-error">⚠ {sw.error}</div>}
       {sw.finishReason === 'length-soft' && !streaming && (
         <div className="msg-note">

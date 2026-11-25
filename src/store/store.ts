@@ -6,7 +6,7 @@ import { CODEX_SCAN, CODEX_SHARE, codexBlocks, globalNotesBlocks, styleBlocks, t
 import { calibrate, currentCharsPerToken, setCharsPerToken } from '../context/tokens';
 import { friendlyError, streamChat, type ProviderError, type WireMessage } from '../providers/openai';
 import {
-  activeSwipe, DEFAULT_SETTINGS, FEATHERLESS_PRESET,
+  type Attachment, activeSwipe, DEFAULT_SETTINGS, FEATHERLESS_PRESET,
   type AppSettings, type Chat, type CodexBook, type HelperThread, type Message, type Suggestion, type ModelEntry, type Preset, type ProviderConfig, type Swipe,
 } from '../types';
 import { uid } from '../lib/id';
@@ -287,7 +287,7 @@ async function putMessage(m: Message) {
   await repo.put('messages', m);
 }
 
-async function appendMessage(role: Message['role'], content: string): Promise<Message> {
+async function appendMessage(role: Message['role'], content: string, attachments?: Attachment[]): Promise<Message> {
   const list = get().messages;
   const m: Message = {
     id: uid(),
@@ -296,23 +296,35 @@ async function appendMessage(role: Message['role'], content: string): Promise<Me
     role,
     swipes: [{ content, createdAt: Date.now() }],
     activeSwipe: 0,
+    ...(attachments?.length ? { attachments } : {}),
   };
   set({ messages: [...list, m] });
   await repo.put('messages', m);
   return m;
 }
 
-function historyItems(msgs: Message[]): HistoryItem[] {
+function historyItems(msgs: Message[], vision: boolean): HistoryItem[] {
   return msgs
     .filter((m) => !m.condensed)
-    .map((m) => ({ id: m.id, role: m.role, content: activeSwipe(m).content }))
+    .map((m) => ({ id: m.id, role: m.role, content: withAttachments(activeSwipe(m).content, m.attachments, vision) }))
     .filter((h) => h.content !== '');
+}
+
+/** Text files go in as text; images as image parts for models that can see, otherwise a short note. */
+export function withAttachments(text: string, atts: Attachment[] | undefined, vision: boolean): HistoryItem['content'] {
+  if (!atts?.length) return text;
+  const files = atts.filter((a) => a.kind === 'file' && a.text).map((a) => `[Attached file: ${a.name}]\n${a.text}\n[End of ${a.name}]`);
+  const images = atts.filter((a) => a.kind === 'image' && a.dataUrl);
+  const notes = vision ? [] : images.map((a) => `[Image attached: ${a.name}, not shown because this model can't see images]`);
+  const body = [...files, ...notes, text].filter(Boolean).join('\n\n');
+  if (!vision || !images.length) return body;
+  return [...(body ? [{ type: 'text' as const, text: body }] : []), ...images.map((a) => ({ type: 'image_url' as const, image_url: { url: a.dataUrl! } }))];
 }
 
 /** Builds the exact request for the history before `uptoIndex` (exclusive). Used by generation and the context viewer. */
 export function buildFor(chat: Chat, msgs: Message[], opts: { continueLast?: boolean } = {}): BuildResult {
   const s = get();
-  const history = historyItems(msgs);
+  const history = historyItems(msgs, !!modelFor(chat, s)?.vision);
   const limit = contextLimitFor(chat, s);
   const recent = history.slice(-CODEX_SCAN).map((h) => (typeof h.content === 'string' ? h.content : '')).join('\n');
   const { hits, dropped } = triggeredEntries(codexBooksFor(chat, s), recent, Math.floor(limit * CODEX_SHARE));
@@ -382,22 +394,22 @@ export function sendMaxTokens(chat: Chat, ctx: BuildResult, s: State = get()) {
 /** True from Send until the reply starts streaming, so a double tap can't start two. */
 let starting = false;
 
-export async function send(text: string) {
+export async function send(text: string, attachments?: Attachment[]) {
   if (get().streamingId || starting) return;
   starting = true;
   try {
-    await sendNow(text);
+    await sendNow(text, attachments);
   } finally {
     starting = false;
   }
 }
 
-async function sendNow(text: string) {
+async function sendNow(text: string, attachments?: Attachment[]) {
   let chat = currentChat();
   if (!chat) chat = await newChat();
-  if (text.trim()) {
-    await appendMessage('user', text);
-    if (chat.title === 'New chat') await updateChat({ title: text.trim().replace(/\s+/g, ' ').slice(0, 60) });
+  if (text.trim() || attachments?.length) {
+    await appendMessage('user', text, attachments);
+    if (chat.title === 'New chat' && text.trim()) await updateChat({ title: text.trim().replace(/\s+/g, ' ').slice(0, 60) });
   }
   await generate(undefined, { fromSend: true });
 }
