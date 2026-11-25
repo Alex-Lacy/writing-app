@@ -11,7 +11,8 @@ async function cachePage(res) {
   const assets = [...new Set([...html.matchAll(/(?:src|href)="\.?\/?(assets\/[^"]+)"/g)].map((m) => new URL(m[1], self.registration.scope).href))];
   const c = await caches.open(CACHE);
   await c.put(PAGE, res.clone());
-  await Promise.all(assets.map(async (u) => (await c.match(u, { ignoreVary: true })) || c.add(u)));
+  // One missing file (say, mid-deploy) mustn't stop the rest; the next visit fills the gap.
+  await Promise.allSettled(assets.map(async (u) => (await c.match(u, { ignoreVary: true })) || c.add(u)));
   for (const req of await c.keys()) if (req.url.includes('/assets/') && !assets.includes(req.url)) await c.delete(req);
 }
 
@@ -19,8 +20,8 @@ self.addEventListener('install', (e) => {
   e.waitUntil(
     (async () => {
       const c = await caches.open(CACHE);
-      await c.addAll(SHELL);
-      await cachePage(await fetch('./', { cache: 'no-cache' }));
+      await Promise.allSettled(SHELL.map((u) => c.add(u)));
+      await cachePage(await fetch('./', { cache: 'no-cache' })).catch(() => {});
       await self.skipWaiting();
     })(),
   );
