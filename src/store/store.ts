@@ -9,6 +9,7 @@ import {
 import { uid } from '../lib/id';
 
 type Panel = 'none' | 'chat-settings' | 'context';
+export type SettingsTab = 'providers' | 'models' | 'presets' | 'general' | 'data';
 
 interface State {
   ready: boolean;
@@ -24,6 +25,7 @@ interface State {
   sidebarOpen: boolean;
   panel: Panel;
   settingsOpen: boolean;
+  settingsTab: SettingsTab;
   lastContext?: BuildResult;
 }
 
@@ -40,6 +42,7 @@ export const useStore = create<State>()(() => ({
   sidebarOpen: false,
   panel: 'none',
   settingsOpen: false,
+  settingsTab: 'providers',
 }));
 
 const get = useStore.getState;
@@ -368,6 +371,7 @@ export async function insertMessage(role: Message['role'], content: string) {
 export const ui = {
   toggleSidebar: (open?: boolean) => set({ sidebarOpen: open ?? !get().sidebarOpen }),
   setPanel: (panel: Panel) => set({ panel: get().panel === panel ? 'none' : panel }),
-  openSettings: (open: boolean) => set({ settingsOpen: open }),
+  openSettings: (open: boolean, tab: SettingsTab = 'providers') => set({ settingsOpen: open, settingsTab: tab }),
+  setSettingsTab: (tab: SettingsTab) => set({ settingsTab: tab }),
   clearError: () => set({ error: undefined }),
 };

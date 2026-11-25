@@ -162,3 +162,14 @@ button.stop { background: var(--danger); color: #fff; border-color: var(--danger
 .rec-head { display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; background: var(--bg3); }
 .rec-note { flex: 1.2 !important; }
 @media (max-width: 860px) { .rec-group .remote-row { flex-wrap: wrap; } .rec-note { flex-basis: 100%; order: 3; } }
+.badges { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; margin-left: 4px; }
+.chip { font-size: 11px; line-height: 1; padding: 3px 6px; border-radius: 999px; background: var(--bg3); border: 1px solid var(--line); white-space: nowrap; }
+.chip.think { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+.chip.muted { color: var(--muted); }
+.tiny { font-size: 11px; }
+.rec-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 4px 0; }
+.rec-main .tiny { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-group .remote-row { align-items: flex-start; }
+.rec-group .remote-row button { margin-top: 4px; }
+.model-row .model-id { white-space: normal; overflow-wrap: anywhere; }
+.model-row .ctx { width: 96px; }

@@ -18,6 +18,9 @@ export interface RemoteModel {
   contextLength?: number;
   description?: string;
   vision?: boolean;
+  tools?: boolean;
+  /** Featherless: how many concurrency units one request uses (1 small, 2 medium, 4 large). */
+  cost?: number;
 }
 
 export type StreamEvent =
@@ -64,6 +67,8 @@ function mapModel(m: any): RemoteModel {
     contextLength: m.context_length ?? m.max_context_length ?? m.context_window ?? undefined,
     description: m.model_class ?? m.description ?? undefined,
     vision: m.features?.image_input ?? m.architecture?.input_modalities?.includes?.('image') ?? undefined,
+    tools: m.features?.tool_use ?? (Array.isArray(m.supported_parameters) ? m.supported_parameters.includes('tools') : undefined),
+    cost: typeof m.concurrency_cost === 'number' ? m.concurrency_cost : undefined,
   };
 }
 

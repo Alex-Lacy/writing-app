@@ -21,6 +21,9 @@ export interface ModelEntry {
   /** Model's own context window if known; the effective limit is min(this, provider cap). */
   contextLength?: number;
   vision?: boolean;
+  tools?: boolean;
+  /** 'always': reasons before every reply. 'optional': hybrid model that can think or answer directly. */
+  thinking?: 'always' | 'optional';
 }
 
 export interface Preset {

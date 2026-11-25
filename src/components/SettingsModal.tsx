@@ -3,17 +3,19 @@ import { repo } from '../db/db';
 import { uid } from '../lib/id';
 import { friendlyError, listModelsPage, PAGE_SIZE, type RemoteModel } from '../providers/openai';
 import { recommendedFor, type RecommendedModel } from '../providers/recommended';
+import { ModelBadges } from './ModelBadges';
 
 const listCache = new Map<string, RemoteModel[]>();
 import {
-  deleteModel, deletePreset, deleteProvider, init, modelLabel, saveSettings, ui, upsertModel, upsertPreset, upsertProvider, useStore,
+  type SettingsTab, deleteModel, deletePreset, deleteProvider, init, modelLabel, saveSettings, ui, upsertModel, upsertPreset, upsertProvider, useStore,
 } from '../store/store';
 import type { ProviderConfig } from '../types';
 
-type Tab = 'providers' | 'models' | 'presets' | 'general' | 'data';
+type Tab = SettingsTab;
 
 export function SettingsModal() {
-  const [tab, setTab] = useState<Tab>('providers');
+  const tab = useStore((s) => s.settingsTab);
+  const setTab = ui.setSettingsTab;
   return (
     <div className="modal-scrim" onClick={() => ui.openSettings(false)}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -91,7 +93,7 @@ function Models() {
   const recommended = provider ? recommendedFor(provider.baseUrl) : [];
 
   const addRec = (r: RecommendedModel) =>
-    provider && upsertModel({ key: `${provider.id}::${r.id}`, providerId: provider.id, modelId: r.id, nickname: r.nickname, contextLength: r.contextLength, vision: r.vision });
+    provider && upsertModel({ key: `${provider.id}::${r.id}`, providerId: provider.id, modelId: r.id, nickname: r.nickname, contextLength: r.contextLength, vision: r.vision, tools: r.tools, thinking: r.thinking });
 
   // Loads every page one at a time, ~1.5s apart, to stay under Featherless's limit of
   // 30 requests per 45s. Results are cached for the session so reopening Settings is free.
@@ -123,9 +125,9 @@ function Models() {
     const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
     return remote.filter((m) => terms.every((t) => m.id.toLowerCase().includes(t))).slice(0, 200);
   }, [remote, q]);
-  const add = (modelId: string, contextLength?: number, vision?: boolean) => {
+  const add = (modelId: string, contextLength?: number, vision?: boolean, tools?: boolean) => {
     if (!provider) return;
-    upsertModel({ key: `${provider.id}::${modelId}`, providerId: provider.id, modelId, contextLength, vision });
+    upsertModel({ key: `${provider.id}::${modelId}`, providerId: provider.id, modelId, contextLength, vision, tools });
   };
 
   return (
@@ -135,7 +137,7 @@ function Models() {
       {models.map((m) => (
         <div key={m.key} className="model-row">
           <input className="nick" value={m.nickname ?? ''} placeholder={modelLabel({ ...m, nickname: undefined })} onChange={(e) => upsertModel({ ...m, nickname: e.target.value || undefined })} title="Nickname" />
-          <span className="muted small model-id" title={m.modelId}>{m.modelId} · {providers.find((p) => p.id === m.providerId)?.name}</span>
+          <span className="muted small model-id" title={m.modelId}>{m.modelId} · {providers.find((p) => p.id === m.providerId)?.name} <ModelBadges m={m} showCtx={false} /></span>
           <input className="ctx" type="number" value={m.contextLength ?? ''} placeholder="ctx" title="Model context length (optional)" onChange={(e) => upsertModel({ ...m, contextLength: e.target.value ? Number(e.target.value) : undefined })} />
           <label className="small" title="Default model for new chats"><input type="radio" checked={defaultKey === m.key} onChange={() => saveSettings({ defaultModelKey: m.key })} /> default</label>
           <button className="icon" onClick={() => deleteModel(m.key)} title="Remove">✕</button>
@@ -145,7 +147,7 @@ function Models() {
       {recommended.length > 0 && provider && (
         <>
           <h3>Recommended for {provider.name}</h3>
-          <p className="muted small">One click adds the model with a nickname. Bigger models write better but need a plan that includes them and run slower.</p>
+          <p className="muted small">Hand-picked from Featherless's ~10,000 models using current writing and roleplay benchmarks. One click adds the model with a nickname. Heavy models write best but use more of your plan's concurrency and need a plan that includes them.</p>
           {[...new Set(recommended.map((r) => r.group))].map((g) => (
             <div key={g} className="rec-group">
               <div className="rec-head">
@@ -156,8 +158,11 @@ function Models() {
                 const added = models.some((x) => x.key === `${pid}::${r.id}`);
                 return (
                   <div key={r.id} className="remote-row">
-                    <span title={r.id}><b>{r.nickname}</b> <span className="muted">{r.id}</span></span>
-                    <span className="muted small rec-note">{r.note}</span>
+                    <div className="rec-main">
+                      <div><b>{r.nickname}</b> <ModelBadges m={r} /></div>
+                      <div className="muted small">{r.note}</div>
+                      <div className="muted tiny" title={r.id}>{r.id}</div>
+                    </div>
                     <button className="small" disabled={added} onClick={() => addRec(r)}>{added ? 'Added' : 'Add'}</button>
                   </div>
                 );
@@ -184,8 +189,8 @@ function Models() {
               return (
                 <div key={m.id} className="remote-row">
                   <span title={m.id}>{m.id}</span>
-                  <span className="muted small">{m.vision ? '👁 ' : ''}{m.contextLength ? `${Math.round(m.contextLength / 1024)}k` : ''} {m.description ?? ''}</span>
-                  <button className="small" disabled={added} onClick={() => add(m.id, m.contextLength, m.vision)}>{added ? 'Added' : 'Add'}</button>
+                  <ModelBadges m={m} />
+                  <button className="small" disabled={added} onClick={() => add(m.id, m.contextLength, m.vision, m.tools)}>{added ? 'Added' : 'Add'}</button>
                 </div>
               );
             })}

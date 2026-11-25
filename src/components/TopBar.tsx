@@ -23,7 +23,7 @@ export function TopBar() {
         className="model-picker"
         value={models.some((m) => m.key === value) ? value : ''}
         onChange={(e) => {
-          if (e.target.value === '__manage') return ui.openSettings(true);
+          if (e.target.value === '__manage') return ui.openSettings(true, 'models');
           if (chat) updateChat({ modelKey: e.target.value });
           else saveSettings({ defaultModelKey: e.target.value });
         }}
