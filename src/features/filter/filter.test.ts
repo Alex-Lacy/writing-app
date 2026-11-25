@@ -21,3 +21,11 @@ describe('Cliché Filter helpers', () => {
     expect(locate(src, 'nothing here')).toBeUndefined();
   });
 });
+
+describe('locate', () => {
+  it('picks the copy nearest the selection', () => {
+    const src = 'She nodded. He left. She nodded.';
+    expect(locate(src, 'She nodded.', 25)).toEqual({ from: 21, to: 32 });
+    expect(locate(src, 'She nodded.', 0)).toEqual({ from: 0, to: 11 });
+  });
+});

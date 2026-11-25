@@ -92,12 +92,18 @@ export async function rewriteMessage(chatId: string, messageId: string, feedback
   if (!chat || !m0) return;
   const content = activeSwipe(m0).content;
   const a = await storyAround(chat, messageId, 0, content.length);
-  let m: Message = { ...m0, swipes: [...m0.swipes, { content: '', createdAt: Date.now(), modelKey: activeSwipe(m0).modelKey }], activeSwipe: m0.swipes.length };
-  const put = (text: string) => {
-    m = { ...m, swipes: m.swipes.map((x, i) => (i === m.activeSwipe ? { ...x, content: text } : x)) };
-    useStore.setState({ messages: useStore.getState().messages.map((x) => (x.id === m.id ? m : x)) });
+  // Always work on the newest copy of the message: other edits can land while the job waits.
+  const slot = m0.swipes.length;
+  const latest = async () => useStore.getState().messages.find((x) => x.id === messageId) ?? (await repo.get('messages', messageId));
+  const write = async (change: (m: Message) => Message, persist: boolean) => {
+    const cur = await latest();
+    if (!cur) return;
+    const next = change(cur);
+    useStore.setState({ messages: useStore.getState().messages.map((x) => (x.id === next.id ? next : x)) });
+    if (persist) await repo.put('messages', next);
   };
-  put('');
+  const setText = (m: Message, text: string) => ({ ...m, swipes: m.swipes.map((x, i) => (i === slot ? { ...x, content: text } : x)) });
+  await write((m) => ({ ...m, swipes: [...m.swipes, { content: '', createdAt: Date.now(), modelKey: activeSwipe(m0).modelKey }], activeSwipe: m.swipes.length }), false);
   try {
     const res = await runJob({
       job: 'rewrite',
@@ -105,20 +111,18 @@ export async function rewriteMessage(chatId: string, messageId: string, feedback
       label: 'Rewriting the message',
       maxTokens: Math.max(800, Math.round(countWords(content) * 2.2)),
       temperature: 0.8,
-      onText: put,
+      onText: (t) => void write((m) => setText(m, t), false),
       messages: [
         { role: 'system', content: `${chat.systemPrompt}\n\nYou are revising one message of an ongoing story. Rewrite it following the instruction, keeping what the instruction doesn't ask to change. Output only the new message.${a.notes ? `\n\n# Story notes\n${a.notes}` : ''}` },
         { role: 'user', content: `# Story before this message\n${a.before || '(start of story)'}\n\n# MESSAGE TO REWRITE\n${content}\n\n# Story after it\n${a.after || '(nothing yet)'}\n\n# Instruction\n${feedback}` },
       ],
     });
-    put(res.text);
+    await write((m) => setText(m, res.text), true);
   } catch (e) {
     // Leave the original showing if the rewrite failed.
-    m = { ...m, swipes: m.swipes.slice(0, -1), activeSwipe: m0.activeSwipe };
-    useStore.setState({ messages: useStore.getState().messages.map((x) => (x.id === m.id ? m : x)), error: (e as Error).message });
+    await write((m) => ({ ...m, swipes: m.swipes.filter((_, i) => i !== slot), activeSwipe: Math.min(m0.activeSwipe, m.swipes.length - 2) }), true);
+    useStore.setState({ error: (e as Error).message });
     throw e;
-  } finally {
-    await repo.put('messages', m);
   }
 }
 

@@ -5,6 +5,7 @@ import type { ThinkingMode } from '../types';
 
 export function Composer() {
   const streaming = useStore((s) => !!s.streamingId);
+  const waiting = useStore((s) => s.waiting);
   const enterToSend = useStore((s) => s.settings.enterToSend);
   const chatId = useStore((s) => s.currentChatId);
   const chat = useStore((s) => currentChat(s));
@@ -22,7 +23,7 @@ export function Composer() {
   useEffect(() => ta.current?.focus(), [chatId]);
 
   const submit = () => {
-    if (streaming) return;
+    if (streaming || waiting) return;
     const t = text;
     setText('');
     void send(t);
@@ -58,7 +59,7 @@ export function Composer() {
         ref={ta}
         value={text}
         rows={1}
-        placeholder={streaming ? 'Generating…' : 'Message (empty to just generate)'}
+        placeholder={waiting ?? (streaming ? 'Generating…' : 'Message (empty to just generate)')}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey && enterToSend && !coarse && !e.nativeEvent.isComposing) {
@@ -78,7 +79,7 @@ export function Composer() {
               disabled={!text.trim()}
               onClick={() => { void insertMessage('user', text); setText(''); }}
             >Add</button>
-            <button className="primary" onClick={submit}>Send</button>
+            <button className="primary" onClick={submit} disabled={!!waiting} title={waiting}>{waiting ? 'Waiting…' : 'Send'}</button>
           </>
         )}
       </div>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { clichesIn, DEFAULT_AUTO_LIMIT, filterMode, fixCliches } from '../../features/filter/filter';
+import { clichesIn, DEFAULT_AUTO_LIMIT, filterMode } from '../../features/filter/filter';
 import { compileRules } from '../../features/filter/rules';
 import { currentChat, saveSettings, updateChat, useStore } from '../../store/store';
 import { activeSwipe, type FilterMode } from '../../types';
@@ -17,8 +17,6 @@ export function FilterTab() {
   const userRules = useStore((s) => s.settings.filterRules);
   const userLists = useStore((s) => s.settings.filterLists);
   const [q, setQ] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState('');
   const { rules, errors } = useMemo(() => compileRules(userRules, userLists), [userRules, userLists]);
   // How often each rule fires in this story's replies (all rules, so switched-off ones show counts too).
   const counts = useMemo(() => {
@@ -37,23 +35,6 @@ export function FilterTab() {
   const shown = rules
     .filter((r) => !q || `${r.id} ${r.description}`.toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0));
-  const last = [...messages].reverse().find((m) => m.role === 'assistant');
-
-  const fixLast = async () => {
-    if (!last) return;
-    setBusy(true);
-    setNote('');
-    try {
-      const hits = clichesIn(activeSwipe(last).content, chat);
-      const n = hits.length ? await fixCliches(chat.id, last.id, hits) : 0;
-      setNote(!hits.length ? 'No clichés in the last reply.' : n ? `${n} fix${n === 1 ? '' : 'es'} in Suggestions.` : 'The model kept them as they are.');
-    } catch (e) {
-      setNote((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div className="panel-body">
       <section>
@@ -64,16 +45,13 @@ export function FilterTab() {
             <span><b>{label}</b> <span className="muted">{hint}</span></span>
           </label>
         ))}
+        <p className="muted small">In any mode, the “N clichés” chip under a reply lists them, with Fix buttons.</p>
         {mode === 'auto' && (
           <label className="field small">
             <span>Most fixes per reply</span>
             <input type="number" min={1} max={12} value={chat.filter?.autoLimit ?? DEFAULT_AUTO_LIMIT} onChange={(e) => setFilter({ autoLimit: Math.max(1, Number(e.target.value) || DEFAULT_AUTO_LIMIT) })} />
           </label>
         )}
-        <div className="row">
-          <button className="small" disabled={busy || !last} onClick={fixLast}>{busy ? 'Fixing…' : 'Fix the last reply now'}</button>
-          {note && <span className="muted small">{note}</span>}
-        </div>
       </section>
 
       <section>

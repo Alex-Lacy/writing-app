@@ -68,17 +68,15 @@ export function useHighlight(body: RefObject<HTMLElement | null>, hits: Hit[], h
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Finds highlighted (rendered) text in the message's source, which may have Markdown marks in it. */
-export function locate(source: string, selected: string): { from: number; to: number } | undefined {
+export function locate(source: string, selected: string, near = 0): { from: number; to: number } | undefined {
   const t = selected.trim();
   if (!t) return;
+  // Every place the text could be (exactly, or with Markdown marks between words); the one
+  // closest to where the selection sits on screen wins, so a repeated line picks the right copy.
+  const words = t.split(/\s+/).filter(Boolean).map(esc);
+  const re = new RegExp(words.join('[\\s*_~`>#\\-"“”]{1,12}'), 'g');
   let r: { from: number; to: number } | undefined;
-  const i = source.indexOf(t);
-  if (i >= 0) r = { from: i, to: i + t.length };
-  else {
-    const words = t.split(/\s+/).filter(Boolean).map(esc);
-    const m = new RegExp(words.join('[\\s*_~`>#\\-"“”]{1,12}')).exec(source);
-    if (m) r = { from: m.index, to: m.index + m[0].length };
-  }
+  for (const m of source.matchAll(re)) if (!r || Math.abs(m.index - near) < Math.abs(r.from - near)) r = { from: m.index, to: m.index + m[0].length };
   if (!r) return;
   // Take in emphasis marks right at the edges, so a rewrite doesn't leave a stray ** behind.
   while (r.from > 0 && /[*_]/.test(source[r.from - 1])) r.from--;

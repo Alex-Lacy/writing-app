@@ -114,6 +114,8 @@ function Styles() {
         ],
       });
       setCondensed({ id: m.id, text: res.text });
+    } catch (e) {
+      useStore.setState({ error: `Condense failed: ${(e as Error).message}` });
     } finally {
       setBusy(false);
     }

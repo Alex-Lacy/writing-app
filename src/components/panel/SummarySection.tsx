@@ -14,11 +14,23 @@ export function SummarySection() {
   const parts = chat.summary ?? [];
   const on = chat.autoSummary !== false;
 
+  const run = async (f: () => Promise<unknown>) => {
+    setBusy(true);
+    setMsg('');
+    try {
+      await f();
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
   const now = async () => {
     setBusy(true);
     setMsg('');
     try {
-      if (!(await summariseNext(chat.id, { force: true }))) setMsg('Not enough older story to summarise yet (the newest messages are always kept in full).');
+      const r = await summariseNext(chat.id, { force: true });
+      if (r !== true) setMsg(r);
     } catch (e) {
       setMsg((e as Error).message);
     } finally {
@@ -41,7 +53,7 @@ export function SummarySection() {
         <div key={p.id} className="sum-part">
           <div className="row">
             <b className="grow small">{p.merged ? 'Earlier story' : `Part ${i + 1}`} <span className="muted">· {p.messageIds.length} messages</span></b>
-            {p.stale && <button className="small ghost" title="A message in this part was edited" onClick={() => refreshPart(chat.id, p.id)}>Out of date: refresh</button>}
+            {p.stale && <button className="small ghost" title="A message in this part was edited" disabled={busy} onClick={() => run(() => refreshPart(chat.id, p.id))}>Out of date: refresh</button>}
             <button className="small ghost" onClick={() => { setEditing(p.id); setText(p.text); }}>Edit</button>
             <button className="small ghost" title="Put these messages back into the context in full" onClick={() => unsummarise(chat.id, p.id)}>Un-summarise</button>
           </div>

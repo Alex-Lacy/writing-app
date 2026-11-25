@@ -10,7 +10,6 @@ import { uid } from '../lib/id';
 import { buildFor, contextLimitFor, replyHooks, updateChat, useStore } from '../store/store';
 import { accept, addSuggestions } from '../store/suggestions';
 import type { Chat, Message, SummaryPart } from '../types';
-import { checkForUpdates } from './updates';
 import { msgText, setupText, transcript } from './storyText';
 
 /** Summarise when the prompt uses this share of the room it has. */
@@ -68,21 +67,24 @@ async function writePart(chat: Chat, stretch: Message[]): Promise<SummaryPart> {
   return { id: uid(), messageIds: stretch.map((m) => m.id), text: res.text, createdAt: Date.now() };
 }
 
-/** Summarises the next stretch. Returns false when there was nothing to do. */
-export async function summariseNext(chatId: string, opts: { force?: boolean } = {}): Promise<boolean> {
+/** Summarises the next stretch. Returns true when it made a summary, otherwise why not. */
+export async function summariseNext(chatId: string, opts: { force?: boolean } = {}): Promise<true | string> {
   let chat = useStore.getState().chats.find((c) => c.id === chatId);
-  if (!chat) return false;
+  if (!chat) return 'No story.';
+  // Saved cards, not just the open chat's: the person may have switched chats meanwhile.
+  const cards = await repo.byChat('suggestions', chatId);
   // One summary card waiting for review is enough.
-  if (useStore.getState().suggestions.some((x) => x.chatId === chatId && x.status === 'pending' && x.target.kind === 'summary')) return false;
+  if (cards.some((x) => x.status === 'pending' && x.target.kind === 'summary')) return 'A summary is waiting for your review in Suggestions.';
   const msgs = await messagesOf(chatId);
-  if (!opts.force && !needsSummary(chat, msgs)) return false;
+  if (!opts.force && !needsSummary(chat, msgs)) return 'Not needed yet.';
   const stretch = nextStretch(msgs);
-  if (!stretch.length) return false;
-  // Lasting details go to the Codex first, so the summary can stay short.
-  if ((chat.updatesEvery ?? 1) > 0) await checkForUpdates(chatId, stretch).catch(() => 0);
+  if (!stretch.length) return 'Not enough older story to summarise yet (the newest messages are always kept in full).';
+  // A summary of this same stretch was rejected: don't keep offering it after every reply.
+  if (!opts.force && cards.some((x) => x.status === 'rejected' && x.target.kind === 'summary' && !x.target.replaces && x.target.part.messageIds[0] === stretch[0].id)) return 'Rejected before.';
+  // (Lasting details already went to the Codex through suggested updates when this text was new.)
   chat = useStore.getState().chats.find((c) => c.id === chatId) ?? chat;
   const part = await writePart(chat, stretch);
-  if (!part.text) return false;
+  if (!part.text) return 'The model returned an empty summary.';
   const first = !chat.summary?.length;
   const [card] = await addSuggestions(chatId, [{ source: 'summary', target: { kind: 'summary', part }, before: '', after: part.text, reason: `Covers ${stretch.length} older messages (about ${countWords(stretch.map(msgText).join(' ')).toLocaleString()} words).` }]);
   // The first summary in a chat is reviewed; later ones apply quietly unless "always ask" is on.
@@ -152,5 +154,5 @@ replyHooks.push(async ({ chatId }) => {
   const chat = useStore.getState().chats.find((c) => c.id === chatId);
   if (!chat || chat.autoSummary === false) return;
   // A long story can need a few parts at once; stop after three.
-  for (let i = 0; i < 3; i++) if (!(await summariseNext(chatId))) break;
+  for (let i = 0; i < 3; i++) if ((await summariseNext(chatId)) !== true) break;
 });

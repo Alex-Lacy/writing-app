@@ -152,7 +152,19 @@ export const repo = {
       const cur = ((await tx.objectStore('kv').get('settings')) ?? {}) as AppSettings;
       const inc = data.settings as AppSettings;
       // Keep this device's provider choice; take the writing defaults and preferences.
-      tx.objectStore('kv').put({ ...inc, ...cur, defaultWriting: normalizeWriting(inc.defaultWriting ?? cur.defaultWriting), defaultSystemPrompt: inc.defaultSystemPrompt ?? cur.defaultSystemPrompt, globalNotes: inc.globalNotes ?? cur.globalNotes }, 'settings');
+      // Style modules and Helpers are merged by id (the backup's version wins), so imported chats
+      // keep the modules they had switched on. Filter rules: the backup's, unless it has none.
+      const byId = <T extends { id: string }>(a: T[] = [], b: T[] = []) => [...a.filter((x) => !b.some((y) => y.id === x.id)), ...b];
+      tx.objectStore('kv').put({
+        ...inc, ...cur,
+        defaultWriting: normalizeWriting(inc.defaultWriting ?? cur.defaultWriting),
+        defaultSystemPrompt: inc.defaultSystemPrompt ?? cur.defaultSystemPrompt,
+        globalNotes: inc.globalNotes ?? cur.globalNotes,
+        styles: inc.styles || cur.styles ? byId(cur.styles, inc.styles) : undefined,
+        helpers: inc.helpers || cur.helpers ? byId(cur.helpers, inc.helpers) : undefined,
+        filterRules: inc.filterRules || cur.filterRules,
+        filterLists: inc.filterLists || cur.filterLists,
+      }, 'settings');
     }
     await tx.done;
     return { chats: data.chats.length };

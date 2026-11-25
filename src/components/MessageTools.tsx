@@ -146,7 +146,13 @@ export function SelectionToolbar() {
         const id = el?.closest<HTMLElement>('[data-mid]')?.dataset.mid;
         const m = id && useStore.getState().messages.find((x) => x.id === id);
         if (!m) return setPos(undefined);
-        const where = locate(activeSwipe(m).content, sel.toString());
+        const source = activeSwipe(m).content;
+        // Where the selection starts in the rendered text, scaled to the source, to tell repeats apart.
+        const pre = document.createRange();
+        pre.setStart(el!, 0);
+        pre.setEnd(range.startContainer, range.startOffset);
+        const shown = el!.textContent?.length || 1;
+        const where = locate(source, sel.toString(), Math.round((pre.toString().length / shown) * source.length));
         if (!where) return setPos(undefined);
         const r = range.getBoundingClientRect();
         // Phones show their own copy/paste menu above a selection, so go below it there.

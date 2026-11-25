@@ -50,6 +50,8 @@ interface State {
   /** Message (or highlighted part of one) the Rewrite box is open for. */
   rewriteTarget?: RewriteTarget;
   compileOpen: boolean;
+  /** Shown while a reply waits for a Helper or Proofread job to finish. */
+  waiting?: string;
 }
 
 export interface RewriteTarget { messageId: string; from?: number; to?: number }
@@ -376,24 +378,36 @@ export function sendMaxTokens(chat: Chat, ctx: BuildResult, s: State = get()) {
   return chat.params.hardCap ? Math.min(room, chat.params.hardCap) : room;
 }
 
+/** True from Send until the reply starts streaming, so a double tap can't start two. */
+let starting = false;
+
 export async function send(text: string) {
-  if (get().streamingId) return;
+  if (get().streamingId || starting) return;
+  starting = true;
+  try {
+    await sendNow(text);
+  } finally {
+    starting = false;
+  }
+}
+
+async function sendNow(text: string) {
   let chat = currentChat();
   if (!chat) chat = await newChat();
   if (text.trim()) {
     await appendMessage('user', text);
     if (chat.title === 'New chat') await updateChat({ title: text.trim().replace(/\s+/g, ' ').slice(0, 60) });
   }
-  await generate();
+  await generate(undefined, { fromSend: true });
 }
 
 /**
  * Generates a reply. With `targetId` (an assistant message) a new swipe is added to it using
  * the history before it; otherwise a new assistant message is appended.
  */
-export async function generate(targetId?: string, opts: { continueId?: string } = {}) {
+export async function generate(targetId?: string, opts: { continueId?: string; fromSend?: boolean } = {}) {
   const chat = currentChat();
-  if (!chat || get().streamingId) return;
+  if (!chat || get().streamingId || get().waiting || (starting && !opts.fromSend)) return;
   const model = modelFor(chat);
   const provider = providerFor(model);
   if (!model || !provider) {
@@ -406,8 +420,12 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
   }
 
   // Let a running side job finish (or stop a background one) so the plan's allowance is free.
-  if (jobRunning()) set({ jobs: [...get().jobs] });
-  await makeRoomForStory();
+  if (jobRunning()) set({ waiting: `Waiting for ${get().jobs[0]?.label ?? 'a side job'} to finish…` });
+  try {
+    await makeRoomForStory();
+  } finally {
+    set({ waiting: undefined });
+  }
   if (get().streamingId) return storyStarted();
 
   const all = get().messages;

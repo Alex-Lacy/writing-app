@@ -5,7 +5,7 @@ import { countWords, LENGTH_ORDER, type LengthBucket } from '../context/length';
 import { repo } from '../db/db';
 import { newEntry } from '../store/codexStore';
 import { codexBooksFor, DEFAULT_UPDATES_EVERY, replyHooks, updateChat, useStore } from '../store/store';
-import { addSuggestions, OWN_BOOK } from '../store/suggestions';
+import { reject, addSuggestions, OWN_BOOK } from '../store/suggestions';
 import type { Chat, Message, StyleModule, Suggestion } from '../types';
 import { setupText, transcript } from './storyText';
 
@@ -32,16 +32,13 @@ Reply with JSON only, no other text:
 At most 5 suggestions. If nothing needs changing, reply {"suggestions":[]}.`;
 
 /** Runs a check on the story since the last one (or on the given messages). Returns how many cards it made. */
-export async function checkForUpdates(chatId: string, only?: Message[]): Promise<number> {
+export async function checkForUpdates(chatId: string): Promise<number> {
   const s = useStore.getState();
   const chat = s.chats.find((c) => c.id === chatId);
   if (!chat) return 0;
   const all = chatId === s.currentChatId ? s.messages : await repo.messages(chatId);
-  let msgs = only;
-  if (!msgs) {
-    const from = chat.checkedUpTo ? all.findIndex((m) => m.id === chat.checkedUpTo) + 1 : 0;
-    msgs = all.slice(Math.max(0, from));
-  }
+  const from = chat.checkedUpTo ? all.findIndex((m) => m.id === chat.checkedUpTo) + 1 : 0;
+  const msgs = all.slice(Math.max(0, from));
   // Keep the newest ~8,000 words.
   let words = 0;
   const picked: Message[] = [];
@@ -63,9 +60,13 @@ export async function checkForUpdates(chatId: string, only?: Message[]): Promise
       { role: 'user', content: `# Current notes\n${setupText(chat, { codex: 'full', summary: false }) || '(none yet)'}\n\n# New story text\n${text}` },
     ],
   });
-  if (!only) await updateChat({ checkedUpTo: all.at(-1)?.id, wordsSinceCheck: 0 }, chat.id);
+  await updateChat({ checkedUpTo: all.at(-1)?.id, wordsSinceCheck: 0 }, chat.id);
   const props = parseJson<{ suggestions?: Proposal[] }>(res.text)?.suggestions ?? [];
-  return (await addSuggestions(chat.id, toSuggestions(useStore.getState().chats.find((c) => c.id === chatId) ?? chat, props))).length;
+  const cards = toSuggestions(useStore.getState().chats.find((c) => c.id === chatId) ?? chat, props);
+  // A newer suggestion for the same entry replaces an older one still waiting.
+  const edited = new Set(cards.flatMap((c) => (c.target.kind === 'codex-edit' ? [c.target.entryId] : [])));
+  for (const x of await repo.byChat('suggestions', chatId)) if (x.status === 'pending' && x.target.kind === 'codex-edit' && edited.has(x.target.entryId)) await reject(x.id);
+  return (await addSuggestions(chat.id, cards)).length;
 }
 
 type NewSuggestion = Omit<Suggestion, 'id' | 'chatId' | 'status' | 'createdAt'>;

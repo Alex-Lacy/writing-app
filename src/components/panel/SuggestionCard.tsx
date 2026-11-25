@@ -67,7 +67,7 @@ export function SuggestionCard({ x }: { x: Suggestion }) {
             <button className="small ghost" onClick={() => undo(x.id)}>Undo</button>
           </>
         )}
-        {x.status === 'rejected' && <span className="muted small">Rejected</span>}
+        {x.status === 'rejected' && <span className={x.failed ? 'msg-error small' : 'muted small'}>{x.failed ?? 'Rejected'}</span>}
       </div>
     </div>
   );

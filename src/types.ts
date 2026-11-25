@@ -183,6 +183,8 @@ export interface Suggestion {
   /** One line on why. */
   reason?: string;
   status: 'pending' | 'accepted' | 'rejected';
+  /** Why it couldn't be applied (the text it changes was edited or removed since). */
+  failed?: string;
   /** What to restore on Undo. */
   undo?: unknown;
   createdAt: number;

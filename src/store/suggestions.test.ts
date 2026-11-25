@@ -96,3 +96,34 @@ describe('auto-summary stretch', () => {
     expect(nextStretch(msgs)).toEqual([]);
   });
 });
+
+describe('passage cards', () => {
+  const put = (content: string) => {
+    const m = { id: 'm1', chatId: chat().id, role: 'assistant', createdAt: 0, order: 0, activeSwipe: 0, swipes: [{ content, createdAt: 0 }] } as Message;
+    useStore.setState({ messages: [m] });
+  };
+  const text = () => useStore.getState().messages[0].swipes[0].content;
+  const card = (from: number, before: string, after: string) => ({ source: 'proofread' as const, target: { kind: 'passage' as const, messageId: 'm1', swipe: 0, from, to: from + before.length }, before, after });
+
+  it('changes the right copy of repeated text, shifts later cards, and undoes in place', async () => {
+    put('its fine. She said its late. its');
+    const [a, b] = await addSuggestions(chat().id, [card(0, 'its', 'it is'), card(18, 'its', "it's")]);
+    await accept(a.id);
+    expect(text()).toBe('it is fine. She said its late. its');
+    await accept(b.id);
+    expect(text()).toBe("it is fine. She said it's late. its");
+    await undo(a.id);
+    expect(text()).toBe("its fine. She said it's late. its");
+    await undo(b.id);
+    expect(text()).toBe('its fine. She said its late. its');
+  });
+
+  it('says why when the text is gone', async () => {
+    put('Hello there.');
+    const [a] = await addSuggestions(chat().id, [card(0, 'Goodbye', 'Bye')]);
+    await accept(a.id);
+    const x = useStore.getState().suggestions.find((s) => s.id === a.id)!;
+    expect(x.status).toBe('rejected');
+    expect(x.failed).toMatch(/edited/);
+  });
+});

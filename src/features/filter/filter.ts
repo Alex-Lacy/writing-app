@@ -3,7 +3,7 @@
 import { parseJson, runJob } from '../../ai/jobs';
 import { repo } from '../../db/db';
 import { replyHooks, useStore } from '../../store/store';
-import { accept, addSuggestions } from '../../store/suggestions';
+import { accept, addSuggestions, tidy } from '../../store/suggestions';
 import { activeSwipe, type Chat, type FilterMode, type Suggestion } from '../../types';
 import { storyAround } from '../rewrite';
 import { compileRules, scan, sentenceAround, type Hit } from './rules';
@@ -40,7 +40,7 @@ const FIX_SYSTEM = `You edit fiction to remove stock phrases that make prose sou
 Reply with JSON only: {"fixes":[{"n":1,"text":"<the whole rewritten sentence>"}]}`;
 
 /** Rewrites the sentences around these hits in one request and offers them as cards. */
-export async function fixCliches(chatId: string, messageId: string, hits: Hit[], auto = false): Promise<number> {
+export async function fixCliches(chatId: string, messageId: string, hits: Hit[], autoApply = 0): Promise<number> {
   const s = useStore.getState();
   const chat = s.chats.find((c) => c.id === chatId);
   if (!chat || !hits.length) return 0;
@@ -82,7 +82,8 @@ export async function fixCliches(chatId: string, messageId: string, hits: Hit[],
     });
   }
   const added = await addSuggestions(chatId, cards);
-  if (auto) for (const sg of added) await accept(sg.id);
+  // Auto mode applies up to its limit; any extra fixes stay as cards.
+  for (const sg of added.slice(0, autoApply)) await accept(sg.id);
   return added.length;
 }
 
@@ -96,5 +97,6 @@ replyHooks.push(async ({ chatId, message, newText }) => {
   const hits = clichesIn(content, chat).filter((h) => h.from >= start);
   if (!hits.length) return;
   const limit = chat.filter?.autoLimit ?? DEFAULT_AUTO_LIMIT;
-  await fixCliches(chatId, message.id, hits.slice(0, limit * 2), mode === 'auto');
+  await fixCliches(chatId, message.id, hits.slice(0, limit * 2), mode === 'auto' ? limit : 0);
+  await tidy(chatId);
 });
