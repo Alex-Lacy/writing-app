@@ -28,6 +28,8 @@ function title(x: Suggestion, bookName: (id: string) => string): string {
     case 'style-add': return `New Style module: ${t.module.name}`;
     case 'style-edit': return `Update Style module: ${t.name}`;
     case 'tags': return 'Story tags';
+    case 'outline': return 'Outline';
+    case 'outline-next': return 'Outline: move to the next beat';
     case 'style-toggle': return `${t.on ? 'Turn on' : 'Turn off'} Style module: ${t.name}`;
   }
 }
@@ -49,7 +51,7 @@ export function SuggestionCard({ x, hideSource }: { x: Suggestion; hideSource?: 
       {x.reason && <p className="muted small">{x.reason}</p>}
       {keys && keys.length > 0 && <p className="muted small">Triggers: {keys.join(', ')}</p>}
       {x.before && t.kind !== 'summary' && <div className="sg-before">{x.before}</div>}
-      {t.kind !== 'codex-remove' && t.kind !== 'style-toggle' && t.kind !== 'length' && (editing ? (
+      {t.kind !== 'codex-remove' && t.kind !== 'style-toggle' && t.kind !== 'length' && t.kind !== 'outline-next' && (editing ? (
         <textarea rows={Math.min(12, Math.max(3, Math.ceil(text.length / 45)))} value={text} onChange={(e) => setText(e.target.value)} />
       ) : (
         <div className="sg-after">{x.after}</div>
@@ -58,7 +60,7 @@ export function SuggestionCard({ x, hideSource }: { x: Suggestion; hideSource?: 
         {x.status === 'pending' && (
           <>
             <button className="small primary" onClick={() => accept(x.id, editing ? text : undefined)}>{editing ? 'Save and accept' : 'Accept'}</button>
-            {t.kind !== 'codex-remove' && t.kind !== 'style-toggle' && !editing && <button className="small ghost" onClick={() => setEditing(true)}>Edit</button>}
+            {t.kind !== 'codex-remove' && t.kind !== 'style-toggle' && t.kind !== 'outline-next' && !editing && <button className="small ghost" onClick={() => setEditing(true)}>Edit</button>}
             <button className="small ghost" onClick={() => reject(x.id)}>Reject</button>
           </>
         )}

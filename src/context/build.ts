@@ -27,7 +27,7 @@ export type Placement =
   | { kind: 'tail' };
 
 /** Where a piece of context came from; drives colours in the context viewer. */
-export type Source = 'system' | 'global' | 'background' | 'style' | 'tags' | 'steering' | 'length' | 'codex' | 'summary' | 'user' | 'assistant' | 'other';
+export type Source = 'system' | 'global' | 'background' | 'style' | 'tags' | 'steering' | 'outline' | 'length' | 'codex' | 'summary' | 'user' | 'assistant' | 'other';
 
 export interface ContextBlock {
   id: string;
@@ -100,6 +100,7 @@ const SOURCE_LABEL: Record<Source, string> = {
   system: 'System prompt',
   background: 'Background',
   'steering': 'Steering',
+  outline: 'Outline',
   length: 'Length instruction',
   codex: 'Codex',
   summary: 'Story so far',

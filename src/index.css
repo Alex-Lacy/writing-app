@@ -203,10 +203,10 @@ button.stop { background: var(--danger); color: #fff; border-color: var(--danger
 
 /* context viewer: one colour per source */
 :root {
-  --c-system: #8a8f9c; --c-background: #c49a5a; --c-steering: #b77fd1; --c-length: #d4706b;
+  --c-system: #8a8f9c; --c-background: #c49a5a; --c-steering: #b77fd1; --c-length: #d4706b; --c-outline: #5fb3a3;
   --c-codex: #5fae8c; --c-global: #a0a35a; --c-style: #c9739b; --c-tags: #d09a3c; --c-summary: #6aa2c9; --c-user: #4f86c6; --c-assistant: #6f9d6a; --c-other: #777;
 }
-.src-system { --c: var(--c-system); } .src-background { --c: var(--c-background); } .src-steering { --c: var(--c-steering); }
+.src-system { --c: var(--c-system); } .src-background { --c: var(--c-background); } .src-steering { --c: var(--c-steering); } .src-outline { --c: var(--c-outline); }
 .src-length { --c: var(--c-length); } .src-codex { --c: var(--c-codex); } .src-global { --c: var(--c-global); } .src-style { --c: var(--c-style); } .src-tags { --c: var(--c-tags); } .src-summary { --c: var(--c-summary); }
 .src-user { --c: var(--c-user); } .src-assistant { --c: var(--c-assistant); } .src-other { --c: var(--c-other); }
 .cx-modal { width: min(900px, 96vw); }

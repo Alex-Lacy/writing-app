@@ -18,7 +18,8 @@ export type Proposal =
   | { type: 'style-add'; name: string; text: string; reason?: string }
   | { type: 'style-edit'; style: string; text: string; reason?: string }
   | { type: 'style-on' | 'style-off'; style: string; reason?: string }
-  | { type: 'tags'; tags: string[]; reason?: string };
+  | { type: 'tags'; tags: string[]; reason?: string }
+  | { type: 'outline'; text: string; reason?: string };
 
 const SYSTEM = `You maintain the notes for a piece of fiction: a Background (always-true facts) and a Codex (entries for characters, places, items and rules, each with trigger words).
 Read the new story text and propose only changes that matter for writing what comes next: a new named character, place or item that will likely come up again; a lasting fact that changed (a relationship, an injury, a location, a secret revealed); an entry that is now wrong. Ignore passing details and anything already covered.
@@ -113,6 +114,8 @@ export function toSuggestions(chat: Chat, props: Proposal[], source: Suggestion[
       if (!mod) continue;
       if (p.type === 'style-edit' && p.text && p.text.trim() !== mod.text.trim()) out.push({ source, target: { kind: 'style-edit', styleId: mod.id, name: mod.name }, before: mod.text, after: p.text, reason: p.reason });
       if (p.type !== 'style-edit' && (p.type === 'style-on') !== !!chat.styleIds?.includes(mod.id)) out.push({ source, target: { kind: 'style-toggle', styleId: mod.id, name: mod.name, on: p.type === 'style-on' }, before: '', after: '', reason: p.reason });
+    } else if (p.type === 'outline' && typeof p.text === 'string' && p.text.trim() && p.text.trim() !== (chat.outline?.text ?? '').trim()) {
+      out.push({ source, target: { kind: 'outline' }, before: chat.outline?.text ?? '', after: p.text.trim(), reason: p.reason });
     } else if (p.type === 'tags' && Array.isArray(p.tags)) {
       const tags = [...new Set(p.tags.filter((t) => typeof t === 'string' && t.trim()).map((t) => t.trim().slice(0, 40)))].slice(0, 20);
       if (tags.length && tags.join('; ') !== (chat.tags ?? []).join('; ')) out.push({ source, target: { kind: 'tags', tags }, before: (chat.tags ?? []).join('; '), after: tags.join('; '), reason: p.reason });

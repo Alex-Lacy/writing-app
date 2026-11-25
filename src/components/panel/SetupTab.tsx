@@ -4,6 +4,7 @@ import { estimateTokens } from '../../context/tokens';
 import { uid } from '../../lib/id';
 import { currentChat, DEFAULT_UPDATES_EVERY, saveSettings, updateChat, upsertPreset, useStore } from '../../store/store';
 import { MATURE_PROMPT, STORY_PROMPT, type GenParams, type WritingSettings } from '../../types';
+import { OutlineSection } from './OutlineSection';
 import { SummarySection } from './SummarySection';
 import { TagsSection } from './TagsSection';
 import { ui } from '../../store/store';
@@ -138,6 +139,7 @@ export function SetupTab() {
           </p>
         </details>
       </div>
+      <OutlineSection chat={chat} />
       <StyleToggles />
       <TagsSection />
 

@@ -5,6 +5,7 @@ import { repo } from '../db/db';
 import { uid } from '../lib/id';
 import type { Chat, CodexEntry, Message, Suggestion, SummaryPart } from '../types';
 import { parseTags } from '../context/codex';
+import { moveMarker, parseOutline } from '../context/outline';
 import { ownBook, putBook } from './codexStore';
 import { saveSettings, updateChat, useStore } from './store';
 
@@ -68,6 +69,18 @@ async function acceptNow(id: string, edited?: string) {
       // The card's text is editable: "a; b; c".
       await updateChat({ tags: parseTags(after) }, chat.id);
       break;
+    case 'outline':
+      if ((chat.outline?.text ?? '') !== (x.before ?? '')) return fail(x, 'the Outline was changed after this was suggested.');
+      undo = chat.outline?.text ?? '';
+      await updateChat({ outline: { ...chat.outline, text: after } }, chat.id);
+      break;
+    case 'outline-next': {
+      const text = chat.outline?.text ?? '';
+      if (parseOutline(text).current !== t.from) return fail(x, 'the Outline moved on since.');
+      undo = text;
+      await updateChat({ outline: { ...chat.outline, text: moveMarker(text, 1) } }, chat.id);
+      break;
+    }
     case 'title':
       undo = chat.title;
       await updateChat({ title: after }, chat.id);
@@ -165,6 +178,7 @@ function currentValue(chat: Chat, t: Suggestion['target']): string | undefined {
     case 'background':
     case 'steering': return chat.writing[t.kind] ?? '';
     case 'tags': return (chat.tags ?? []).join('; ');
+    case 'outline': return chat.outline?.text ?? '';
     case 'style-edit': return get().settings.styles?.find((m) => m.id === t.styleId)?.text;
   }
   return undefined;
@@ -188,6 +202,16 @@ async function undoNow(id: string) {
       break;
     case 'title':
       await updateChat({ title: u }, chat.id);
+      break;
+    case 'outline':
+      await updateChat({ outline: { ...chat.outline, text: u } }, chat.id);
+      break;
+    case 'outline-next':
+      if (parseOutline(chat.outline?.text).current !== t.from + 1) {
+        set({ error: 'Couldn’t undo: the Outline has moved since. Move the marker by hand instead.' });
+        return;
+      }
+      await updateChat({ outline: { ...chat.outline, text: moveMarker(chat.outline?.text ?? '', -1) } }, chat.id);
       break;
     case 'background':
     case 'steering':

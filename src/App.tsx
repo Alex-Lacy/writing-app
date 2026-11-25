@@ -8,6 +8,7 @@ import { SyncModal } from './components/SyncModal';
 import { Sidebar } from './components/Sidebar';
 import { StoryPanel } from './components/panel/StoryPanel';
 import './features/updates';
+import './features/outline';
 import './features/summary';
 import './features/filter/filter';
 import { TopBar } from './components/TopBar';

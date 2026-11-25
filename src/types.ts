@@ -107,6 +107,8 @@ export interface Chat {
   stylesOff?: boolean;
   /** Story tags: genre, tone, content notes, sent as one compact line. */
   tags?: string[];
+  /** Outline for long-term steering: beats one per line, the current one starting with ">". */
+  outline?: { text: string; off?: boolean; check?: boolean; ahead?: number };
   /** Cliché Filter settings for this chat. */
   filter?: FilterSettings;
 }
@@ -179,7 +181,9 @@ export type SuggestionTarget =
   | { kind: 'style-add'; module: StyleModule }
   | { kind: 'style-edit'; styleId: string; name: string }
   | { kind: 'style-toggle'; styleId: string; name: string; on: boolean }
-  | { kind: 'tags'; tags: string[] };
+  | { kind: 'tags'; tags: string[] }
+  | { kind: 'outline' }
+  | { kind: 'outline-next'; from: number };
 
 export interface Suggestion {
   id: string;

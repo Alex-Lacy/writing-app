@@ -80,6 +80,7 @@ http.createServer(async (req, res) => {
     const known = { Mara: ['character', 'A detective with a scar.'], Rell: ['character', 'A smuggler who owes Mara money.'], Harrowgate: ['place', 'A rain-soaked port city.'] };
     return reply(JSON.stringify(Object.entries(known).filter(([n]) => part.split('# Part')[1]?.includes(n)).map(([name, [category, text]]) => ({ name, category, keys: [name], text }))));
   }
+  if (sys.includes("You track a story's progress against its outline")) return reply(JSON.stringify({ reached: /BEATDONE|scene goal/.test(String(last.content)), reason: 'the offer was made' }));
   if (sys.includes('You tidy Codex entries')) {
     const first = String(last.content).match(/^## (.+)$/m)?.[1];
     return reply(first ? JSON.stringify([{ type: 'codex-edit', entry: first, text: `${first}, tidied.`, keys: [first], reason: 'removed leftover brackets' }]) : '[]');
