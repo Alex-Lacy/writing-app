@@ -291,6 +291,12 @@ export async function duplicateChat(id: string, upTo?: string) {
 
 export async function deleteChat(id: string) {
   void import('../sync/units').then((u) => u.noteGone(id));
+  // Its unsent drafts too.
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith('draft:') && k.includes(id)) localStorage.removeItem(k);
+  } catch {
+    /* storage blocked */
+  }
   // Drop it from state first: a reply still streaming checks this and skips its saves.
   const chats = get().chats.filter((c) => c.id !== id);
   set({ chats, codex: get().codex.filter((b) => b.chatId !== id) });

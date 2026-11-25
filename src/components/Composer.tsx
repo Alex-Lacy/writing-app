@@ -3,6 +3,7 @@ import { LENGTH_BUCKETS, LENGTH_ORDER, type LengthBucket } from '../context/leng
 import { cancelWait, currentChat, insertMessage, modelFor, send, stop, updateChat, useStore } from '../store/store';
 import type { Attachment, ThinkingMode } from '../types';
 import { readAttachment } from '../lib/attach';
+import { useDraft } from './useDraft';
 
 export function Composer() {
   const streaming = useStore((s) => !!s.streamingId);
@@ -11,7 +12,7 @@ export function Composer() {
   const chatId = useStore((s) => s.currentChatId);
   const chat = useStore((s) => currentChat(s));
   const model = useStore((s) => modelFor(currentChat(s), s));
-  const [text, setText] = useState('');
+  const [text, setText] = useDraft(chatId ? `story:${chatId}` : undefined);
   const [atts, setAtts] = useState<Attachment[]>([]);
   const file = useRef<HTMLInputElement>(null);
   const ta = useRef<HTMLTextAreaElement>(null);

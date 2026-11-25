@@ -5,6 +5,7 @@ import { currentChat, ui, useStore } from '../../store/store';
 import { jobModelName } from '../../ai/jobs';
 import { SuggestionCard } from './SuggestionCard';
 import { useStickyScroll } from '../useStickyScroll';
+import { useDraft } from '../useDraft';
 import { accept } from '../../store/suggestions';
 
 /** Talk to a Helper about this story; its proposed changes show as cards right in the conversation. */
@@ -15,8 +16,13 @@ export function HelperTab() {
   const suggestions = useStore((s) => s.suggestions);
   const hasStory = useStore((s) => s.messages.length > 0);
   const modelName = useStore((s) => jobModelName('helper', currentChat(s)));
-  const [text, setText] = useState('');
   const box = useRef<HTMLTextAreaElement>(null);
+  const anyLive = useStore((s) => s.helperLive);
+  const helpers = helpersList();
+  const fresh = !hasStory && !chat?.writing.background.trim();
+  const helper = helpers.find((h) => h.id === chosen) ?? helpers.find((h) => h.id === (fresh ? 'helper-new-story' : 'helper-setup'))!;
+  // Unsent text is kept per story and Helper, through tab switches and reloads.
+  const [text, setText] = useDraft(chat ? `helper:${chat.id}:${helper.id}` : undefined);
   // Grows upward with what's typed (the box sits at the bottom), up to half the window.
   useEffect(() => {
     const el = box.current;
@@ -24,10 +30,6 @@ export function HelperTab() {
     el.style.height = 'auto';
     el.style.height = `${Math.min(Math.max(el.scrollHeight, 64), window.innerHeight * 0.5)}px`;
   }, [text]);
-  const anyLive = useStore((s) => s.helperLive);
-  const helpers = helpersList();
-  const fresh = !hasStory && !chat?.writing.background.trim();
-  const helper = helpers.find((h) => h.id === chosen) ?? helpers.find((h) => h.id === (fresh ? 'helper-new-story' : 'helper-setup'))!;
   const thread = chat && threads.find((t) => t.chatId === chat.id && t.helperId === helper.id);
   // The reply runs in the background, so it is shown from the store: closing the panel loses nothing.
   const mine = anyLive && chat && anyLive.chatId === chat.id && anyLive.helperId === helper.id ? anyLive : undefined;
