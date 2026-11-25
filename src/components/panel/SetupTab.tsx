@@ -14,8 +14,11 @@ function StyleToggles() {
   if (!chat) return null;
   const ids = chat.styleIds ?? [];
   return (
-    <section className="wt-block src-style">
-      <div className="wt-head"><b>Style modules</b> <em className="muted small">sent right after Background</em></div>
+    <section className={`wt-block src-style${chat.stylesOff ? ' off' : ''}`}>
+      <div className="wt-head">
+        <label className="wt-on" title="Send the ticked style modules"><input type="checkbox" checked={!chat.stylesOff} onChange={(e) => updateChat({ stylesOff: !e.target.checked || undefined })} /> <b>Style modules</b></label>
+        <em className="muted small">sent right after Background</em>
+      </div>
       {styles.length === 0 && <p className="muted small">None in the Library yet.</p>}
       {styles.map((m) => (
         <label key={m.id} className="switch small" title={m.text.slice(0, 300)}>
@@ -103,14 +106,14 @@ export function SetupTab() {
         <textarea rows={6} value={chat.systemPrompt} onChange={(e) => updateChat({ systemPrompt: e.target.value, presetId: undefined })} />
       </details>
 
-      <div className="wt-block src-background">
-        <div className="wt-head"><b>Background</b> <em className="muted small">~{estimateTokens(w.background)} tokens</em></div>
+      <div className={`wt-block src-background${w.backgroundOff ? ' off' : ''}`}>
+        <div className="wt-head"><label className="wt-on" title="Send Background (switch off to keep the text but leave it out)"><input type="checkbox" checked={!w.backgroundOff} onChange={(e) => setW({ backgroundOff: !e.target.checked || undefined })} /> <b>Background</b></label> <em className="muted small">~{estimateTokens(w.background)} tokens</em></div>
         <p className="muted small">Always sent, at the top. For what's always true: premise, characters, setting, style.</p>
         <textarea rows={7} value={w.background} onChange={(e) => setW({ background: e.target.value })} placeholder="Story premise, characters, setting, style…" />
       </div>
 
-      <div className="wt-block src-steering">
-        <div className="wt-head"><b>Steering</b> <em className="muted small">~{estimateTokens(w.steering)} tokens</em></div>
+      <div className={`wt-block src-steering${w.steeringOff ? ' off' : ''}`}>
+        <div className="wt-head"><label className="wt-on" title="Send Steering (switch off to keep the text but leave it out)"><input type="checkbox" checked={!w.steeringOff} onChange={(e) => setW({ steeringOff: !e.target.checked || undefined })} /> <b>Steering</b></label> <em className="muted small">~{estimateTokens(w.steering)} tokens</em></div>
         <p className="muted small">Sent just before each reply, so it pulls hardest on what comes next: tone, pacing, focus, point of view. Keep it short.</p>
         <textarea rows={4} value={w.steering} onChange={(e) => setW({ steering: e.target.value })} placeholder="[Style: vivid, slow-burn. Focus on Mara's POV.]" />
         <details>

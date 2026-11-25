@@ -19,6 +19,8 @@ describe('buildContext', () => {
 
   it('sends Background and Steering whenever they have text (there is no on/off switch)', () => {
     expect(writingBlocks({ ...DEFAULT_WRITING, enabled: false, background: 'MEM', steering: 'AN' }).map((b) => b.id)).toEqual(['background', 'steering']);
+    expect(writingBlocks({ ...DEFAULT_WRITING, background: 'MEM', steering: 'AN', backgroundOff: true }).map((b) => b.id)).toEqual(['steering']);
+    expect(writingBlocks({ ...DEFAULT_WRITING, background: 'MEM', steering: 'AN', steeringOff: true }).map((b) => b.id)).toEqual(['background']);
     expect(writingBlocks({ ...DEFAULT_WRITING, background: ' ', steering: '' })).toEqual([]);
   });
 

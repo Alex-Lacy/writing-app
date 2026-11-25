@@ -1,0 +1,15 @@
+import { chromium } from 'playwright-core';
+const b = await chromium.launch({ executablePath: process.env.CHROME });
+const p = await b.newPage({ viewport: { width: 1280, height: 900 } });
+await p.goto('http://127.0.0.1:5173');
+await p.waitForSelector('.modal');
+await p.locator('.modal-head .icon').click();
+await p.getByRole('button', { name: '+ New story' }).click();
+await p.locator('.panel-tabs button:has-text("Setup")').click();
+await p.locator('.src-background textarea').fill('Mara is a detective.');
+await p.locator('.src-background .wt-on input').uncheck();
+await p.locator('.src-style .wt-on input').uncheck();
+await p.screenshot({ path: '/tmp/toggles.png' });
+await p.getByRole('button', { name: 'View context' }).click();
+console.log('legend:', (await p.locator('.cx-legend').innerText()).replace(/\s+/g, ' ').slice(0, 200));
+await b.close();

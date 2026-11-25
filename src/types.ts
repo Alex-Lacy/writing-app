@@ -59,6 +59,9 @@ export interface WritingSettings {
   steering: string;
   steeringDepth: number;
   steeringMode: SteeringMode;
+  /** Switched off: kept, but not sent. */
+  backgroundOff?: boolean;
+  steeringOff?: boolean;
 }
 
 /** Per-chat thinking control, only offered for models that can think. */
@@ -100,6 +103,8 @@ export interface Chat {
   summaryAlwaysAsk?: boolean;
   /** Style modules (from the Library) switched on for this chat. */
   styleIds?: string[];
+  /** All style modules switched off at once (the picks are kept). */
+  stylesOff?: boolean;
   /** Story tags: genre, tone, content notes, sent as one compact line. */
   tags?: string[];
   /** Cliché Filter settings for this chat. */

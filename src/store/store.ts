@@ -367,7 +367,7 @@ export function buildFor(chat: Chat, msgs: Message[], opts: { continueLast?: boo
     blocks: [
       ...globalNotesBlocks(s.settings.globalNotes, chat.globalNotes),
       ...writingBlocks(chat.writing),
-      ...styleBlocks(s.settings.styles, chat.styleIds),
+      ...(chat.stylesOff ? [] : styleBlocks(s.settings.styles, chat.styleIds)),
       ...tagsBlocks(chat.tags),
       ...codexBlocks(hits),
       ...summaryBlocks(chat.summary),

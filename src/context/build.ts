@@ -124,8 +124,8 @@ const sourceOf = (b: ContextBlock): Source =>
 export function writingBlocks(w: WritingSettings | undefined): ContextBlock[] {
   if (!w) return [];
   const out: ContextBlock[] = [];
-  if (w.background.trim()) out.push({ id: 'background', label: 'Background', text: w.background.trim(), placement: { kind: 'top', order: 10 }, source: 'background' });
-  if (w.steering.trim())
+  if (!w.backgroundOff && w.background.trim()) out.push({ id: 'background', label: 'Background', text: w.background.trim(), placement: { kind: 'top', order: 10 }, source: 'background' });
+  if (!w.steeringOff && w.steering.trim())
     out.push({
       id: 'steering',
       label: 'Steering',
