@@ -1,6 +1,6 @@
 import { estimateTokens } from '../context/tokens';
 import { uid } from '../lib/id';
-import { currentChat, saveSettings, ui, updateChat, upsertPreset, useStore } from '../store/store';
+import { currentChat, saveSettings, updateChat, upsertPreset, useStore } from '../store/store';
 import type { GenParams, WritingSettings } from '../types';
 
 function NumField({ label, value, onChange, step = 0.01, min, max, hint, placeholder = 'default' }: {
@@ -77,31 +77,41 @@ export function ChatSettingsPanel() {
           </label>
         </h3>
         <fieldset disabled={!w.enabled} className={w.enabled ? '' : 'dim'}>
-          <label className="field">
-            <span>Memory <em className="muted">~{estimateTokens(w.memory)} tokens, always at the top of context</em></span>
+          <div className="wt-block src-memory">
+            <div className="wt-head"><b>Memory</b> <em className="muted small">~{estimateTokens(w.memory)} tokens</em></div>
+            <p className="muted small">Always placed at the very top of the context, right after the system prompt. Use it for the things that are always true: premise, characters, setting, style.</p>
             <textarea rows={7} value={w.memory} onChange={(e) => setW({ memory: e.target.value })} placeholder="Story premise, characters, setting, style…" />
-          </label>
-          <label className="field">
-            <span>Author's Note <em className="muted">~{estimateTokens(w.authorsNote)} tokens</em></span>
+          </div>
+
+          <div className="wt-block src-authors-note">
+            <div className="wt-head"><b>Author's Note</b> <em className="muted small">~{estimateTokens(w.authorsNote)} tokens</em></div>
+            <p className="muted small">
+              Placed near the end of the context, so it has a stronger, more immediate effect than Memory. Use it for
+              what should steer the next replies: tone, pacing, focus, POV.
+            </p>
             <textarea rows={4} value={w.authorsNote} onChange={(e) => setW({ authorsNote: e.target.value })} placeholder="[Style: vivid, slow-burn. Focus on Mara's POV.]" />
-          </label>
-          <div className="grid2">
-            <label className="field num" title="How many messages from the end. 1 = just before the latest message.">
-              <span>Insert depth</span>
-              <input type="number" min={1} step={1} value={w.anDepth} onChange={(e) => setW({ anDepth: Math.max(1, Number(e.target.value) || 1) })} />
-            </label>
-            <label className="field num" title="Inline works with every model. Some models (DeepSeek, for one) move separate system messages to the top of the prompt, which weakens the note.">
-              <span>Insert as</span>
-              <select value={w.anRole} onChange={(e) => setW({ anRole: e.target.value as WritingSettings['anRole'] })}>
-                <option value="inline">Inside the message (recommended)</option>
-                <option value="system">Separate system message</option>
-              </select>
-            </label>
+            <div className="grid2">
+              <label className="field num">
+                <span>Insert depth</span>
+                <input type="number" min={1} step={1} value={w.anDepth} onChange={(e) => setW({ anDepth: Math.max(1, Number(e.target.value) || 1) })} />
+              </label>
+              <label className="field num">
+                <span>Insert as</span>
+                <select value={w.anRole} onChange={(e) => setW({ anRole: e.target.value as WritingSettings['anRole'] })}>
+                  <option value="inline">Inside the message (recommended)</option>
+                  <option value="system">Separate system message</option>
+                </select>
+              </label>
+            </div>
+            <p className="muted small">
+              <b>Depth</b> is how many messages back from the latest one the note goes. 1 = with your latest message
+              (strongest). Higher numbers sit further back and pull less. <b>Inside the message</b> works with every
+              model; some models (DeepSeek, for one) move separate system messages to the top, which weakens the note.
+            </p>
           </div>
           <button className="ghost small" onClick={() => saveSettings({ defaultWriting: { ...w, memory: '', authorsNote: '' } })}>Use toggle + AN settings as default</button>
         </fieldset>
       </section>
-      <button className="ghost wide" onClick={() => ui.openContext(true)}>View exact context sent →</button>
     </div>
   );
 }

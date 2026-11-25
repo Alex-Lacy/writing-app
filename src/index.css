@@ -206,3 +206,8 @@ button.stop { background: var(--danger); color: #fff; border-color: var(--danger
 .cx-chip { font-size: 11px; font-weight: 600; color: var(--c); text-transform: uppercase; letter-spacing: .04em; }
 .cx-part pre { margin: 0; white-space: pre-wrap; font: 13px/1.5 var(--sans); max-height: none; }
 @media (max-width: 860px) { .cx-modal { width: 100vw; max-height: 100dvh; border-radius: 0; } }
+.panel-head { gap: 8px; }
+.wt-block { border: 1px solid var(--line); border-left: 4px solid var(--c); border-radius: 8px; padding: 8px 10px; margin: 10px 0; background: var(--bg); }
+.wt-head { display: flex; gap: 8px; align-items: baseline; }
+.wt-head b { color: var(--c); }
+.wt-block p { margin: 4px 0 6px; }

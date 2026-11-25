@@ -29,6 +29,8 @@ export default function App() {
         <aside className="panel">
           <header className="panel-head">
             <b>Chat settings</b>
+            <span className="spacer" />
+            <button className="small" onClick={() => ui.openContext(true)} title="See exactly what gets sent to the model, in order">View context</button>
             <button className="icon" onClick={() => ui.setPanel('none')}>✕</button>
           </header>
           <ChatSettingsPanel />
