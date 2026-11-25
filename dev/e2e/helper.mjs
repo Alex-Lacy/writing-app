@@ -26,7 +26,7 @@ await p.waitForSelector('.helper-input button:has-text("Stop")');
 await p.waitForTimeout(1500);
 console.log('progress:', await p.locator('.helper-progress').innerText());
 await p.locator('.helper').screenshot({ path: '/tmp/helper-progress.png' });
-await p.locator('.panel-head .icon').click();
+await p.locator('.panel-head .icon[title="Close"]').click();
 await p.waitForSelector('.jobs');
 console.log('indicator while closed:', await p.locator('.jobs').first().innerText());
 await p.waitForSelector('.jobs.done', { timeout: 30000 });
