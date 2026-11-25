@@ -109,7 +109,19 @@ export interface RunJobOptions {
   extra?: Record<string, unknown>;
   /** Live text, for jobs shown as they stream (the Helper). */
   onText?: (text: string) => void;
+  /** Where the job is, for a progress line: sent, then thinking (with reasoning so far), then writing. */
+  onProgress?: (p: JobProgress) => void;
 }
+
+export interface JobProgress {
+  phase: 'sent' | 'busy' | 'thinking' | 'writing';
+  /** Characters of reasoning so far. */
+  reasoning: number;
+}
+
+/** No reply starting within this long (the provider queues busy models), or a stream going silent, ends the job. */
+const FIRST_BYTE_MS = 6 * 60_000;
+const SILENT_MS = 2 * 60_000;
 
 export interface JobResult {
   text: string;
@@ -133,20 +145,40 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
       let reasoning = '';
       const extra = { ...jobThinkingExtra(o.job, m), ...o.extra };
       const thinkRoom = m.thinking && (m.thinking === 'always' || THINKS[o.job]) ? 4096 : 0;
+      let stalled = '';
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const watch = (ms: number, why: string) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          stalled = why;
+          abort.abort();
+        }, ms);
+      };
       for (let attempt = 0; ; attempt++) {
         try {
+          o.onProgress?.({ phase: 'sent', reasoning: reasoning.length });
+          watch(FIRST_BYTE_MS, `${m.provider.name} didn't start the reply within ${FIRST_BYTE_MS / 60_000} minutes (the model may be busy). Try again in a moment.`);
           for await (const ev of streamChat(m.provider, m.modelId, o.messages, { maxTokens: (o.maxTokens ?? 2048) + thinkRoom, temperature: o.temperature ?? 0.5 }, abort.signal, extra)) {
+            watch(SILENT_MS, `The reply stopped arriving for ${SILENT_MS / 60_000} minutes, so it was ended. Try again.`);
             if (ev.type === 'content') {
               text += ev.text;
               o.onText?.(text);
-            } else if (ev.type === 'reasoning') reasoning += ev.text;
+              o.onProgress?.({ phase: 'writing', reasoning: reasoning.length });
+            } else if (ev.type === 'reasoning') {
+              reasoning += ev.text;
+              o.onProgress?.({ phase: 'thinking', reasoning: reasoning.length });
+            }
           }
+          clearTimeout(timer);
           return { text: text.trim(), reasoning };
         } catch (e) {
+          clearTimeout(timer);
+          if (stalled) throw new Error(stalled);
           // Busy (another request is using the plan's allowance) or a dropped connection: wait and retry.
           const busy = (e as ProviderError).status === 429 || e instanceof TypeError;
           if (!busy || text || attempt >= RETRY_WAITS.length || abort.signal.aborted) throw e;
           running = undefined;
+          o.onProgress?.({ phase: 'busy', reasoning: reasoning.length });
           await new Promise((r) => setTimeout(r, RETRY_WAITS[attempt]));
           await waitForStoryReply();
           running = { job: o.job, abort };

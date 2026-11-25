@@ -132,8 +132,13 @@ async function reply(chatId: string, helperId: string) {
 
   helperAbort = new AbortController();
   discard = false;
-  setLive({ chatId, helperId, text: '' });
+  const startedAt = Date.now();
+  let phase: 'queued' | 'sent' | 'busy' | 'thinking' | 'writing' = 'queued';
+  let thought = 0;
+  const show = (t: string) => setLive({ chatId, helperId, text: t, startedAt, phase, reasoning: thought });
+  show('');
   let text = '';
+  let lastPaint = 0;
   try {
     const res = await runJob({
       job: 'helper',
@@ -144,7 +149,17 @@ async function reply(chatId: string, helperId: string) {
       signal: helperAbort.signal,
       onText: (t) => {
         text = t;
-        setLive({ chatId, helperId, text: t.replace(/```changes[\s\S]*$/i, '') });
+        show(t);
+      },
+      onProgress: (p) => {
+        if (p.phase === phase && p.phase !== 'thinking') return;
+        phase = p.phase;
+        thought = p.reasoning;
+        // Thinking streams in tiny pieces; repaint a few times a second at most.
+        if (p.phase !== 'thinking' || Date.now() - lastPaint > 400) {
+          lastPaint = Date.now();
+          show(text);
+        }
       },
       messages: [
         { role: 'system', content: `${helper.instructions}\n${PROTOCOL}\n\n${context}` },

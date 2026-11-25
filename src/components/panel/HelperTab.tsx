@@ -67,9 +67,10 @@ export function HelperTab() {
             )}
           </div>
         ))}
-        {live !== undefined && (
+        {live !== undefined && mine && (
           <div className="helper-msg assistant">
-            <div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(live) || '<span class="muted">Thinking… (you can close this panel; the reply will be here)</span>' }} />
+            {live.replace(/```changes[\s\S]*$/i, '').trim() && <div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(live.replace(/```changes[\s\S]*$/i, '')) }} />}
+            <HelperProgress live={mine} />
           </div>
         )}
         {mine?.error && (
@@ -92,5 +93,33 @@ export function HelperTab() {
           : <button className="primary" disabled={!text.trim() || busy} onClick={send} title={busy ? 'Another Helper is replying' : undefined}>Send</button>}
       </div>
     </div>
+  );
+}
+
+/** What the Helper is doing and for how long, so a slow reply doesn't look stuck. */
+function HelperProgress({ live }: { live: NonNullable<ReturnType<typeof useStore.getState>['helperLive']> }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const secs = Math.max(0, Math.floor((now - (live.startedAt ?? now)) / 1000));
+  const time = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+  // Suggestions are written as a block after the words; count them as they arrive.
+  const block = live.text.match(/```changes([\s\S]*)$/i)?.[1];
+  const cards = block ? (block.match(/"type"\s*:/g) ?? []).length : 0;
+  const words = Math.round((live.reasoning ?? 0) / 5.5);
+  const what =
+    block !== undefined ? `Writing suggestions${cards ? ` (${cards} so far)` : ''}`
+    : live.phase === 'writing' ? 'Writing'
+    : live.phase === 'thinking' ? `Thinking it through (~${words.toLocaleString()} words)`
+    : live.phase === 'sent' ? 'Waiting for the model to start'
+    : live.phase === 'busy' ? 'Your plan is busy with another request; trying again shortly'
+    : 'Queued behind another job';
+  return (
+    <p className="helper-progress muted small">
+      <span className="spinner" /> {what} · {time}
+      {secs > 20 && live.phase !== 'writing' && block === undefined && <span> · You can close this panel; the reply will wait here.</span>}
+    </p>
   );
 }

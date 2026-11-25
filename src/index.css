@@ -335,3 +335,7 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .helper-actions button { font-size: 12px; padding: 1px 6px; border: none; color: var(--muted); background: none; }
 .helper-actions button:hover { color: var(--fg); }
 @media (hover: none) { .helper-actions { opacity: 1; } }
+.helper-progress { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 4px 0 0; }
+.spinner { width: 10px; height: 10px; border: 2px solid var(--muted); border-top-color: transparent; border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }

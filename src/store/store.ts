@@ -53,7 +53,7 @@ interface State {
   /** Shown while a reply waits for a Helper or Proofread job to finish. */
   waiting?: string;
   /** A Helper reply in progress (kept here so closing the panel doesn't lose it), or its error. */
-  helperLive?: { chatId: string; helperId: string; text: string; error?: string };
+  helperLive?: { chatId: string; helperId: string; text: string; error?: string; startedAt?: number; phase?: 'queued' | 'sent' | 'busy' | 'thinking' | 'writing'; reasoning?: number };
   /** A Helper replied while its tab wasn't showing. */
   helperDone?: { chatId: string; helperId: string };
 }
