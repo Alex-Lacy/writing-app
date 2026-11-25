@@ -4,7 +4,7 @@ import { uid } from '../lib/id';
 import { friendlyError, listModelsPage, PAGE_SIZE, type RemoteModel } from '../providers/openai';
 import { recommendedFor, type RecommendedModel } from '../providers/recommended';
 import { ModelBadges } from './ModelBadges';
-import type { ModelEntry } from '../types';
+import type { AppSettings, ModelEntry, Theme } from '../types';
 
 const listCache = new Map<string, RemoteModel[]>();
 import {
@@ -243,11 +243,34 @@ function General() {
       <label className="field num"><span>Context safety margin (tokens)</span>
         <input type="number" value={s.safetyMargin} onChange={(e) => saveSettings({ safetyMargin: Math.max(0, Number(e.target.value) || 0) })} />
       </label>
-      <label className="field num"><span>Theme</span>
-        <select value={s.theme} onChange={(e) => saveSettings({ theme: e.target.value as 'dark' | 'light' })}>
-          <option value="dark">Dark</option><option value="light">Light</option>
-        </select>
-      </label>
+      <h3>Appearance</h3>
+      <div className="grid2">
+        <label className="field"><span>Theme</span>
+          <select value={s.theme} onChange={(e) => saveSettings({ theme: e.target.value as Theme })}>
+            <option value="system">Match my device</option><option value="dark">Dark</option><option value="black">Black (OLED)</option><option value="light">Light</option><option value="sepia">Sepia</option>
+          </select>
+        </label>
+        <label className="field"><span>Story font</span>
+          <select value={s.storyFont ?? 'serif'} onChange={(e) => saveSettings({ storyFont: e.target.value as AppSettings['storyFont'] })}>
+            <option value="serif">Book (serif)</option><option value="sans">Clean (sans-serif)</option><option value="mono">Typewriter (monospace)</option>
+          </select>
+        </label>
+        <label className="field"><span>Story text size: {s.storyFontSize ?? 17}px</span>
+          <input type="range" min={13} max={28} value={s.storyFontSize ?? 17} onChange={(e) => saveSettings({ storyFontSize: Number(e.target.value) })} />
+        </label>
+        <label className="field"><span>Line spacing: {(s.storyLineHeight ?? 1.65).toFixed(2)}</span>
+          <input type="range" min={1.2} max={2.2} step={0.05} value={s.storyLineHeight ?? 1.65} onChange={(e) => saveSettings({ storyLineHeight: Number(e.target.value) })} />
+        </label>
+        <label className="field"><span>Story column width: {s.storyWidth ?? 820}px</span>
+          <input type="range" min={520} max={1400} step={20} value={s.storyWidth ?? 820} onChange={(e) => saveSettings({ storyWidth: Number(e.target.value) })} />
+        </label>
+        <label className="field"><span>Interface text size: {s.uiFontSize ?? 15}px</span>
+          <input type="range" min={12} max={20} value={s.uiFontSize ?? 15} onChange={(e) => saveSettings({ uiFontSize: Number(e.target.value) })} />
+        </label>
+      </div>
+      <p className="msg-body" style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 12px' }}>
+        Rain hammered the tin roofs as Mara stepped onto the pier. “You’re the detective,” he said.
+      </p>
     </div>
   );
 }

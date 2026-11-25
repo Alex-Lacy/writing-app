@@ -1,9 +1,11 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import { renderMarkdown } from '../lib/markdown';
 import {
-  continueReply, deleteFrom, deleteMessage, deleteSwipe, editMessage, modelLabel, regenerate, swipe, useStore,
+  ui, continueReply, deleteFrom, deleteMessage, deleteSwipe, editMessage, modelLabel, regenerate, swipe, useStore,
 } from '../store/store';
 import { activeSwipe, type Message } from '../types';
+import { ClicheChip, MessageCards, RewriteBox } from './MessageTools';
+import { useCliches, useHighlight } from './messageHooks';
 
 interface Props {
   m: Message;
@@ -20,6 +22,9 @@ export const MessageItem = memo(function MessageItem({ m, isLast, outOfContext }
   const [copied, setCopied] = useState(false);
   const sw = activeSwipe(m);
   const html = useMemo(() => renderMarkdown(sw.content), [sw.content]);
+  const body = useRef<HTMLDivElement>(null);
+  const hits = useCliches(m, !streaming && !editing);
+  useHighlight(body, hits, html);
 
   const startEdit = () => {
     setDraft(sw.content);
@@ -37,7 +42,7 @@ export const MessageItem = memo(function MessageItem({ m, isLast, outOfContext }
   };
 
   return (
-    <div className={`msg msg-${m.role}${outOfContext ? ' msg-out' : ''}`}>
+    <div className={`msg msg-${m.role}${outOfContext ? ' msg-out' : ''}`} data-mid={m.id}>
       <div className="msg-head">
         <span className="msg-role">{m.role === 'assistant' ? modelLabel(model) : m.role === 'user' ? 'You' : 'System'}</span>
         {outOfContext && <span className="badge" title="Older than what fits in the context window">out of context</span>}
@@ -72,7 +77,7 @@ export const MessageItem = memo(function MessageItem({ m, isLast, outOfContext }
           </div>
         </div>
       ) : (
-        <div className="msg-body markdown" dangerouslySetInnerHTML={{ __html: html || (streaming && !sw.reasoning ? '<span class="cursor">▍</span>' : '') }} />
+        <div ref={body} className="msg-body markdown" dangerouslySetInnerHTML={{ __html: html || (streaming && !sw.reasoning ? '<span class="cursor">▍</span>' : '') }} />
       )}
 
       {sw.error && <div className="msg-error">⚠ {sw.error}</div>}
@@ -96,10 +101,15 @@ export const MessageItem = memo(function MessageItem({ m, isLast, outOfContext }
         )
       )}
 
+      {!editing && !streaming && <ClicheChip m={m} hits={hits} />}
+      {!editing && !streaming && <MessageCards m={m} />}
+      {!editing && !streaming && <RewriteBox m={m} />}
+
       {!editing && !streaming && (
         <div className="msg-actions">
           <button className="ghost" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
           <button className="ghost" onClick={startEdit} disabled={busy}>Edit</button>
+          {m.role !== 'system' && <button className="ghost" onClick={() => ui.openRewrite({ messageId: m.id })} disabled={busy} title="Rewrite with your feedback, or proofread. Highlight text to work on just part of it.">Rewrite</button>}
           <button className="ghost" onClick={() => regenerate(m.id)} disabled={busy} title={m.role === 'assistant' ? 'New version of this reply' : 'Regenerate the reply to this'}>Retry</button>
           {m.swipes.length > 1 && <button className="ghost" onClick={() => deleteSwipe(m.id)} disabled={busy}>Delete version</button>}
           <button className="ghost" onClick={() => deleteMessage(m.id)} disabled={busy}>Delete</button>

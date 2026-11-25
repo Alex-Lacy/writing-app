@@ -10,6 +10,7 @@ import {
   type AppSettings, type Chat, type CodexBook, type HelperThread, type Message, type Suggestion, type ModelEntry, type Preset, type ProviderConfig, type Swipe,
 } from '../types';
 import { uid } from '../lib/id';
+import { jobRunning, makeRoomForStory, storyStarted } from '../ai/jobs';
 import { STARTER_STYLES } from '../features/starters';
 
 type Panel = 'none' | 'chat-settings';
@@ -41,10 +42,16 @@ interface State {
   settingsTab: SettingsTab;
   contextOpen: boolean;
   libraryOpen: boolean;
+  /** Full-screen reading: sidebars and panel hidden. */
+  focus: boolean;
   /** Helper shown in the Helper tab. */
   helperId?: string;
   lastContext?: BuildResult;
+  /** Message (or highlighted part of one) the Rewrite box is open for. */
+  rewriteTarget?: RewriteTarget;
 }
+
+export interface RewriteTarget { messageId: string; from?: number; to?: number }
 
 let abort: AbortController | null = null;
 let streamingChatId: string | undefined;
@@ -70,6 +77,7 @@ export const useStore = create<State>()(() => ({
   settingsTab: 'providers',
   contextOpen: false,
   libraryOpen: false,
+  focus: false,
 }));
 
 const get = useStore.getState;
@@ -395,6 +403,11 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
     return;
   }
 
+  // Let a running side job finish (or stop a background one) so the plan's allowance is free.
+  if (jobRunning()) set({ jobs: [...get().jobs] });
+  await makeRoomForStory();
+  if (get().streamingId) return storyStarted();
+
   const all = get().messages;
   let target: Message;
   let history: Message[];
@@ -431,6 +444,7 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
   }
   const params = { ...chat.params, maxTokens: sendMaxTokens(chat, ctx) };
   set({ lastContext: ctx, streamingId: target.id, error: undefined });
+  storyStarted();
   streamingChatId = chat.id;
   const chatExists = () => get().chats.some((c) => c.id === chat.id);
   let lastSave = performance.now();
@@ -619,7 +633,12 @@ export async function insertMessage(role: Message['role'], content: string) {
 }
 
 export const ui = {
-  toggleSidebar: (open?: boolean) => set({ sidebarOpen: open ?? !get().sidebarOpen }),
+  toggleSidebar: (open?: boolean) => {
+    // Phones: a drawer. Wider screens: show or hide the chat list column.
+    if (matchMedia('(max-width: 860px)').matches) set({ sidebarOpen: open ?? !get().sidebarOpen });
+    else void saveSettings({ sidebarHidden: open === undefined ? !get().settings.sidebarHidden : !open });
+  },
+  setFocus: (on: boolean) => set({ focus: on, sidebarOpen: false }),
   setPanel: (panel: Panel) => set({ panel: get().panel === panel ? 'none' : panel }),
   /** Opens the Story panel on a tab. */
   openPanel: (tab: PanelTab) => set({ panel: 'chat-settings', panelTab: tab }),
@@ -630,4 +649,5 @@ export const ui = {
   openContext: (open: boolean) => set({ contextOpen: open }),
   openLibrary: (open: boolean) => set({ libraryOpen: open, sidebarOpen: false }),
   clearError: () => set({ error: undefined }),
+  openRewrite: (t?: RewriteTarget) => set({ rewriteTarget: t }),
 };

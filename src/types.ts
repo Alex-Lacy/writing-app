@@ -228,7 +228,7 @@ export interface FilterSettings {
 
 // ---------- Jobs: which model does what ----------
 
-export type Job = 'proofread' | 'helper' | 'updates' | 'summary' | 'filter';
+export type Job = 'proofread' | 'helper' | 'updates' | 'summary' | 'filter' | 'rewrite';
 /** A model for a job: a model key from "Your models", or providerId::modelId. Unset = default. */
 export type JobModels = Partial<Record<Job, string>>;
 
@@ -276,7 +276,17 @@ export interface AppSettings {
   /** Extra tokens kept free (on top of the reply room) when fitting history; covers estimate error. */
   safetyMargin: number;
   enterToSend: boolean;
-  theme: 'dark' | 'light';
+  theme: Theme;
+  /** Reading settings for story text. */
+  storyFontSize?: number;
+  storyFont?: 'serif' | 'sans' | 'mono';
+  storyLineHeight?: number;
+  /** Max width of the story column in px. */
+  storyWidth?: number;
+  /** Desktop: chat list hidden. */
+  sidebarHidden?: boolean;
+  /** Size of everything else (buttons, panels), in px. */
+  uiFontSize?: number;
   /** Library: notes sent with every chat that has them on. */
   globalNotes?: string;
   /** Per-job model overrides (Settings, Models, Advanced). */
@@ -284,6 +294,9 @@ export interface AppSettings {
   /** Defaults for new chats. */
   defaultUpdatesEvery?: number;
   defaultAutoSummary?: boolean;
+  /** Cliché Filter: the person's own rules and word lists, added to the built-in ones. */
+  filterRules?: string;
+  filterLists?: string;
   /** Style modules in the Library. */
   styles?: StyleModule[];
   /** Custom Helpers, and edited copies of built-in ones (same id). */
@@ -295,6 +308,8 @@ export interface AppSettings {
   /** One-time data migrations already applied. */
   migrations?: string[];
 }
+
+export type Theme = 'dark' | 'light' | 'sepia' | 'black' | 'system';
 
 export const DEFAULT_WRITING: WritingSettings = {
   enabled: false,

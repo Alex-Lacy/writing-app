@@ -185,7 +185,12 @@ export async function undo(id: string) {
       break;
     case 'passage': {
       const m = await findMessage(t.messageId);
-      if (m) await putMessageAnywhere({ ...m, swipes: m.swipes.map((s, i) => (i === t.swipe ? { ...s, content: u } : s)) });
+      // Put back just this passage, so undoing one fix keeps later ones; the full snapshot is the fallback.
+      if (m) await putMessageAnywhere({ ...m, swipes: m.swipes.map((s, i) => {
+        if (i !== t.swipe) return s;
+        const at = s.content.indexOf(x.after);
+        return { ...s, content: at < 0 ? u : s.content.slice(0, at) + x.before + s.content.slice(at + x.after.length) };
+      }) });
       break;
     }
   }

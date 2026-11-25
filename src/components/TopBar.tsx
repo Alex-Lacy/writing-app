@@ -20,7 +20,7 @@ export function TopBar() {
 
   return (
     <header className="topbar">
-      <button className="icon menu" onClick={() => ui.toggleSidebar()} title="Chats">☰</button>
+      <button className="icon menu" onClick={() => ui.toggleSidebar()} title="Show or hide the chat list">☰</button>
       <select
         className="model-picker"
         value={models.some((m) => m.key === value) ? value : ''}
@@ -58,9 +58,10 @@ export function TopBar() {
         </button>
       )}
       {jobs.length > 0 && <span className="jobs muted small" title={jobs.map((j) => j.label).join(', ')}>⟳ {jobs[0].label}…</span>}
+      <button className="icon" onClick={() => ui.setFocus(true)} title="Full-screen reading: hide everything but the story (Esc to leave)">⤢</button>
       {chat && (
         <button className={`icon panel-btn${panel === 'chat-settings' ? ' active' : ''}`} onClick={() => (pending ? ui.openPanel('suggestions') : ui.setPanel('chat-settings'))} title={pending ? `${pending} suggestions to review` : 'Story panel: setup, Codex, Helper, suggestions'}>
-          ☰{pending > 0 && <span className="badge">{pending}</span>}
+          ▤{pending > 0 && <span className="badge">{pending}</span>}
         </button>
       )}
     </header>

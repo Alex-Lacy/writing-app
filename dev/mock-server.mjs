@@ -34,6 +34,14 @@ http.createServer(async (req, res) => {
   if (sys.includes('```changes'))
     return reply('Here is a setup for your story.\n\n```changes\n[{"type":"title","text":"Harbour Lights"},{"type":"background","text":"Mara Voss, a detective, hunts a smuggler in a rain-soaked port city."},{"type":"steering","text":"[Tone: noir, tense. Third person, past tense.]"},{"type":"codex-add","name":"Captain Rell","keys":["Rell"],"text":"Harbour captain."},{"type":"length","value":"scene"}]\n```');
   if (sys.includes('You condense writing-style instructions')) return reply('Short version.');
+  if (sys.includes('remove stock phrases')) return reply('{"fixes":[{"n":1,"text":"Cold went through her."}]}');
+  if (sys.includes('You proofread a passage')) {
+    const q = String(last.content).match(/# PASSAGE TO CHECK\n([\s\S]*?)\n\n# Story after/)?.[1] ?? '';
+    const w = q.match(/\b[A-Z][a-z]+\b/)?.[0];
+    return reply(JSON.stringify({ issues: w ? [{ quote: w, problem: 'Name differs from the notes.', fix: w.toUpperCase() }] : [] }));
+  }
+  if (sys.includes('revising a passage')) return reply('A cleaner passage.');
+  if (sys.includes('revising one message')) return reply('The whole message, rewritten as asked.');
   if (j.continue_final_message) {
     res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream' });
     res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: ' and then it continued.' } }] })}\n\n`);
@@ -56,7 +64,7 @@ http.createServer(async (req, res) => {
     res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }] })}\n\n`);
     return res.end('data: [DONE]\n\n');
   }
-  const text = `You said: "${String(typeof last.content === 'string' ? last.content : '').slice(0, 80)}". The prompt had ${j.messages.length} messages. **Bold** and a second paragraph.\n\nThe end.`;
+  const text = `You said: "${String(typeof last.content === 'string' ? last.content : '').slice(0, 80)}". The prompt had ${j.messages.length} messages. **Bold** and a second paragraph.\n\n${String(last.content).includes('SLOP') ? 'A shiver ran down her spine. ' : ''}The end.`;
   res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream' });
   const chunks = j.model.includes('reasoner') ? ['<thi', 'nk>Let me think about', ' this carefully.</think>\n\n', ...text.match(/.{1,6}/gs)] : text.match(/.{1,6}/gs);
   for (const c of chunks) {

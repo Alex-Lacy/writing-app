@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { buildFor, currentChat, useStore } from '../store/store';
 import { MessageItem } from './MessageItem';
 import { Composer } from './Composer';
+import { SelectionToolbar } from './MessageTools';
 
 export function ChatView() {
   const messages = useStore((s) => s.messages);
@@ -35,7 +36,7 @@ export function ChatView() {
         {messages.length === 0 && (
           <div className="empty">
             <h2>{chat ? 'Start writing' : 'Writing Studio'}</h2>
-            <p>Pick a model up top, then just start typing. For a guided setup, use <b>+ New story</b> or the Helper in the Story panel (☰).</p>
+            <p>Pick a model up top, then just start typing. For a guided setup, use <b>+ New story</b> or the Helper in the Story panel (▤).</p>
           </div>
         )}
         {messages.map((m, i) => (
@@ -47,6 +48,7 @@ export function ChatView() {
           {error} <span className="muted">(tap to dismiss)</span>
         </div>
       )}
+      <SelectionToolbar />
       <Composer />
     </div>
   );
