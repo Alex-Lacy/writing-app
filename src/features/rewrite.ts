@@ -6,7 +6,7 @@ import { parseJson, runJob } from '../ai/jobs';
 import { triggeredEntries } from '../context/codex';
 import { countWords } from '../context/length';
 import { repo } from '../db/db';
-import { codexBooksFor, contextLimitFor, useStore } from '../store/store';
+import { codexBooksFor, contextLimitFor, updateChat, useStore } from '../store/store';
 import { addSuggestions } from '../store/suggestions';
 import { activeSwipe, type Chat, type Message, type Suggestion } from '../types';
 import { setupText } from './storyText';
@@ -136,7 +136,14 @@ export async function rewriteMessage(chatId: string, messageId: string, feedback
 interface Issue { quote: string; problem: string; fix: string }
 
 /** Proofread: consistency and facts against the setup, Codex and earlier story; spelling and grammar too on your own messages. */
-export async function proofread(chatId: string, messageId: string, range?: { from: number; to: number }): Promise<number> {
+export interface ProofreadOptions {
+  /** The pre-publishing pass: spelling, grammar, punctuation and typos in every message too. */
+  thorough?: boolean;
+  signal?: AbortSignal;
+  label?: string;
+}
+
+export async function proofread(chatId: string, messageId: string, range?: { from: number; to: number }, o: ProofreadOptions = {}): Promise<number> {
   const chat = useStore.getState().chats.find((c) => c.id === chatId);
   const m = (await messagesOf(chatId)).find((x) => x.id === messageId);
   if (!chat || !m) return 0;
@@ -144,15 +151,16 @@ export async function proofread(chatId: string, messageId: string, range?: { fro
   const from = range?.from ?? 0;
   const to = range?.to ?? content.length;
   const a = await storyAround(chat, messageId, from, to);
-  const grammar = m.role === 'user';
+  const grammar = m.role === 'user' || o.thorough;
   const res = await runJob({
     job: 'proofread',
     chat,
-    label: 'Proofreading',
-    maxTokens: 2000,
+    label: o.label ?? 'Proofreading',
+    signal: o.signal,
+    maxTokens: o.thorough ? 3000 : 2000,
     temperature: 0.2,
     messages: [
-      { role: 'system', content: `You proofread a passage of fiction for consistency with the story's notes and the story so far: wrong names, contradicted facts, characters who aren't present or know things they shouldn't, wrong pronouns, timeline or location slips, objects that changed.${grammar ? ' Also fix spelling, grammar and punctuation.' : ' Ignore style and taste; only report real errors.'}
+      { role: 'system', content: `You proofread a passage of fiction for consistency with the story's notes and the story so far: wrong names, contradicted facts, characters who aren't present or know things they shouldn't, wrong pronouns, timeline or location slips, objects that changed.${grammar ? ` Also fix spelling, grammar, punctuation and typos (doubled or missing words).${o.thorough ? ' This is the final check before publishing: be thorough, but leave deliberate style alone (dialect in dialogue, fragments, the author\'s punctuation habits).' : ''}` : ' Ignore style and taste; only report real errors.'}
 Reply with JSON only: {"issues":[{"quote":"<exact text from the passage, short>","problem":"<one sentence>","fix":"<replacement for the quote>"}]}. The quote must be copied exactly from the passage. If there are no problems, reply {"issues":[]}.${a.notes ? `\n\n# Story notes\n${a.notes}` : ''}` },
       { role: 'user', content: `# Story before the passage\n${a.before || '(start of story)'}\n\n# PASSAGE TO CHECK\n${a.passage}\n\n# Story after the passage\n${a.after || '(end of story so far)'}` },
     ],
@@ -160,7 +168,7 @@ Reply with JSON only: {"issues":[{"quote":"<exact text from the passage, short>"
   const issues = parseJson<{ issues?: Issue[] }>(res.text)?.issues ?? [];
   const cards: NewSuggestion[] = [];
   let cursor = from;
-  for (const it of issues.slice(0, 12)) {
+  for (const it of issues.slice(0, o.thorough ? 30 : 12)) {
     if (!it?.quote || typeof it.fix !== 'string' || it.fix === it.quote) continue;
     let at = content.indexOf(it.quote, cursor);
     if (at < 0 || at >= to) at = content.indexOf(it.quote, from);
@@ -169,4 +177,93 @@ Reply with JSON only: {"issues":[{"quote":"<exact text from the passage, short>"
     cards.push({ source: 'proofread', target: { kind: 'passage', messageId, swipe: m.activeSwipe, from: at, to: at + it.quote.length }, before: it.quote, after: it.fix, reason: it.problem });
   }
   return (await addSuggestions(chatId, cards)).length;
+}
+
+// ---------- Whole story, before publishing ----------
+
+/** Longest stretch sent in one request; longer messages are split at paragraph breaks. */
+const PROOF_CHUNK_WORDS = 1200;
+
+/** Splits a message into ranges of at most ~PROOF_CHUNK_WORDS, ending at paragraph breaks. */
+export function proofChunks(text: string, maxWords = PROOF_CHUNK_WORDS): { from: number; to: number }[] {
+  const out: { from: number; to: number }[] = [];
+  let from = 0;
+  let words = 0;
+  const re = /\n\s*\n/g;
+  let last = 0;
+  for (let m = re.exec(text); ; m = re.exec(text)) {
+    const end = m ? m.index : text.length;
+    words += countWords(text.slice(last, end));
+    if (words >= maxWords || !m) {
+      if (text.slice(from, end).trim()) out.push({ from, to: end });
+      from = m ? m.index + m[0].length : text.length;
+      words = 0;
+    }
+    if (!m) break;
+    last = m.index + m[0].length;
+  }
+  return out;
+}
+
+/** A short fingerprint of a message's text, so unchanged messages are skipped on the next run. */
+export function textHash(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return `${s.length}:${(h >>> 0).toString(36)}`;
+}
+
+export interface StoryProof {
+  chatId: string;
+  done: number;
+  total: number;
+  cards: number;
+  startedAt: number;
+  running: boolean;
+  note?: string;
+}
+
+let proofAbort: AbortController | undefined;
+export const stopStoryProofread = () => proofAbort?.abort();
+
+/**
+ * Proofreads every message (or only the AI's), a message or ~1,200 words at a time, as cards.
+ * Messages checked before and unchanged since are skipped, so a stopped run picks up where it was.
+ */
+export async function proofreadStory(chatId: string, include: 'story' | 'all', fromStart = false) {
+  const s = useStore.getState();
+  const chat = s.chats.find((c) => c.id === chatId);
+  if (!chat || s.storyProof?.running) return;
+  const checked = fromStart ? {} : { ...(chat.proofChecked ?? {}) };
+  const msgs = (await messagesOf(chatId)).filter((m) => m.role !== 'system' && (include === 'all' || m.role === 'assistant') && activeSwipe(m).content.trim());
+  const todo = msgs.filter((m) => checked[m.id] !== textHash(activeSwipe(m).content));
+  const total = todo.length;
+  const show = (p: Partial<StoryProof>) => {
+    const cur = useStore.getState().storyProof;
+    useStore.setState({ storyProof: { chatId, done: 0, total, cards: 0, startedAt: Date.now(), running: true, ...cur, ...p } as StoryProof });
+  };
+  useStore.setState({ storyProof: undefined });
+  show({ startedAt: Date.now() });
+  proofAbort = new AbortController();
+  let cards = 0;
+  let done = 0;
+  try {
+    for (const m of todo) {
+      const text = activeSwipe(m).content;
+      for (const r of proofChunks(text)) {
+        if (proofAbort.signal.aborted) throw new DOMException('Stopped', 'AbortError');
+        cards += await proofread(chatId, m.id, r, { thorough: true, signal: proofAbort.signal, label: `Proofreading the story (${done + 1} of ${total})` });
+        show({ cards });
+      }
+      checked[m.id] = textHash(text);
+      done++;
+      show({ done });
+      // Saved as it goes, so closing the app or stopping keeps the progress.
+      await updateChat({ proofChecked: checked }, chatId);
+    }
+    show({ running: false, note: total ? undefined : 'Every message was already checked and hasn\'t changed since.' });
+  } catch (e) {
+    show({ running: false, note: (e as Error).name === 'AbortError' ? 'Stopped. Run it again to carry on from here.' : (e as Error).message });
+  } finally {
+    proofAbort = undefined;
+  }
 }

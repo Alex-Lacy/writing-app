@@ -54,6 +54,8 @@ interface State {
   waiting?: string;
   /** A Helper reply in progress (kept here so closing the panel doesn't lose it), or its error. */
   helperLive?: { chatId: string; helperId: string; text: string; error?: string; startedAt?: number; phase?: 'queued' | 'sent' | 'busy' | 'thinking' | 'writing'; reasoning?: number };
+  /** The whole-story proofread (Export), shown wherever you are. */
+  storyProof?: import('../features/rewrite').StoryProof;
   /** A Helper replied while its tab wasn't showing. */
   helperDone?: { chatId: string; helperId: string };
 }

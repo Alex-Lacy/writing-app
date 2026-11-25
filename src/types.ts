@@ -94,6 +94,8 @@ export interface Chat {
   wordsSinceCheck?: number;
   /** Last message covered by a suggested-updates check. */
   checkedUpTo?: string;
+  /** Whole-story proofread: message id to a fingerprint of the text when it was checked. */
+  proofChecked?: Record<string, string>;
   /** Show every new summary part as a card instead of only the first. */
   summaryAlwaysAsk?: boolean;
   /** Style modules (from the Library) switched on for this chat. */
