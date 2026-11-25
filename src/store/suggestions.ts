@@ -48,6 +48,11 @@ export async function accept(id: string, edited?: string) {
       undo = chat.systemPrompt;
       await updateChat({ systemPrompt: after, presetId: undefined }, chat.id);
       break;
+    case 'tags':
+      undo = chat.tags;
+      // The card's text is editable: "a; b; c".
+      await updateChat({ tags: after.split(/[;\n]/).map((t) => t.trim()).filter(Boolean) }, chat.id);
+      break;
     case 'title':
       undo = chat.title;
       await updateChat({ title: after }, chat.id);
@@ -182,6 +187,9 @@ export async function undo(id: string) {
       break;
     case 'style-edit':
       await saveSettings({ styles: (get().settings.styles ?? []).map((m) => (m.id === t.styleId ? { ...m, text: u } : m)) });
+      break;
+    case 'tags':
+      await updateChat({ tags: u }, chat.id);
       break;
     case 'style-toggle':
       await updateChat({ styleIds: u }, chat.id);

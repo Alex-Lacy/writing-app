@@ -32,7 +32,7 @@ http.createServer(async (req, res) => {
   if (sys.includes('You write recaps of a story'))
     return reply('Mara arrived at the harbour and met Captain Rell, who agreed to help her find the ship.');
   if (sys.includes('```changes'))
-    return reply('Here is a setup for your story.\n\n```changes\n[{"type":"title","text":"Harbour Lights"},{"type":"background","text":"Mara Voss, a detective, hunts a smuggler in a rain-soaked port city."},{"type":"steering","text":"[Tone: noir, tense. Third person, past tense.]"},{"type":"codex-add","name":"Captain Rell","keys":["Rell"],"text":"Harbour captain."},{"type":"length","value":"scene"}]\n```');
+    return reply('Here is a setup for your story.\n\n```changes\n[{"type":"title","text":"Harbour Lights"},{"type":"background","text":"Mara Voss, a detective, hunts a smuggler in a rain-soaked port city."},{"type":"steering","text":"[Tone: noir, tense. Third person, past tense.]"},{"type":"codex-add","name":"Captain Rell","keys":["Rell"],"text":"Harbour captain."},{"type":"length","value":"scene"},{"type":"tags","tags":["noir","tense","mystery"]}]\n```');
   if (sys.includes('You condense writing-style instructions')) return reply('Short version.');
   if (sys.includes('remove stock phrases')) return reply('{"fixes":[{"n":1,"text":"Cold went through her."}]}');
   if (sys.includes('You proofread a passage')) {

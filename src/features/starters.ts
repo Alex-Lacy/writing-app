@@ -49,12 +49,13 @@ How to change the story's setup: you can't edit anything directly. When you want
  {"type":"style-add","name":"...","text":"..."},
  {"type":"style-edit","style":"<existing module name>","text":"<full new text>"},
  {"type":"style-on","style":"<module name>"},
- {"type":"style-off","style":"<module name>"}
+ {"type":"style-off","style":"<module name>"},
+ {"type":"tags","tags":["<genre>","<tone>","<content note>", "..."]}
 ]
 \`\`\`
 Each item may have a "reason". Only include the items you're changing. Always give full replacement text, never a partial edit. Don't say a change is done; say you've suggested it.
 
-What each part does: the system prompt sets the model's role and rules. Background is always sent at the top (premise, main characters, setting, style). Steering is sent right before each reply, so it pulls hardest on what comes next (tone, pacing, focus, point of view); keep it short. Codex entries are sent only when their trigger words come up in the recent story, so they suit side characters, places, items and rules. Length sets how long each reply is. Style modules are reusable writing-style instructions kept in the Library and switched on per story (sent right after Background); editing one changes it for every story that uses it.
+What each part does: the system prompt sets the model's role and rules. Background is always sent at the top (premise, main characters, setting, style). Steering is sent right before each reply, so it pulls hardest on what comes next (tone, pacing, focus, point of view); keep it short. Codex entries are sent only when their trigger words come up in the recent story, so they suit side characters, places, items and rules. Length sets how long each reply is. Story tags are a short list of genre, tone and content notes (e.g. dark fantasy, slow burn, explicit), sent as one line; a tags change gives the full new list. Style modules are reusable writing-style instructions kept in the Library and switched on per story (sent right after Background); editing one changes it for every story that uses it.
 Keep your own messages short and plain. Ask at most three questions at a time. This is adult fiction where any theme is allowed; don't moralise or add warnings.`;
 
 export const BUILTIN_HELPERS: HelperDef[] = [
@@ -65,7 +66,7 @@ export const BUILTIN_HELPERS: HelperDef[] = [
     builtIn: true,
     instructions: `You help someone set up a new piece of collaborative fiction with an AI writer.
 Start from what they describe. If important things are unclear (point of view, who the person plays if anyone, tone, how explicit, the main characters), ask up to three short questions in one message. If they say "just go" or give enough, don't ask.
-Then propose a complete setup in one changes block: a title, a system prompt (the AI's role as a writer or roleplay partner, written in second person, 80 to 200 words), a Background (premise, setting, main characters with a line or two each, style), a short Steering note, Codex entries for secondary characters and places, and a Length.
+Then propose a complete setup in one changes block: a title, a system prompt (the AI's role as a writer or roleplay partner, written in second person, 80 to 200 words), a Background (premise, setting, main characters with a line or two each, style), a short Steering note, Story tags (genre, tone, content: 3 to 8), Codex entries for secondary characters and places, and a Length.
 After proposing, tell them in one or two sentences that they can accept the cards and start writing.`,
   },
   {

@@ -19,6 +19,7 @@ export function setupText(chat: Chat, opts: { codex?: 'full' | 'names' | 'none';
   if (chat.systemPrompt.trim()) parts.push(`## System prompt\n${chat.systemPrompt.trim()}`);
   if (chat.writing.background.trim()) parts.push(`## Background (always sent at the top)\n${chat.writing.background.trim()}`);
   if (chat.writing.steering.trim()) parts.push(`## Steering (sent just before each reply)\n${chat.writing.steering.trim()}`);
+  if (chat.tags?.length) parts.push(`## Story tags\n${chat.tags.join('; ')}`);
   const styles = useStore.getState().settings.styles ?? [];
   const on = styles.filter((m) => chat.styleIds?.includes(m.id));
   if (on.length) parts.push(`## Style modules switched on\n${on.map((m) => `### ${m.name}\n${m.text}`).join('\n\n')}`);

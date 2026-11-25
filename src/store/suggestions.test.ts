@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { codexBlocks, matchKey, triggeredEntries } from '../context/codex';
+import { codexBlocks, matchKey, tagsBlocks, triggeredEntries } from '../context/codex';
 import { splitReply } from '../features/helper';
 import { nextStretch } from '../features/summary';
 import { toSuggestions } from '../features/updates';
@@ -125,5 +125,18 @@ describe('passage cards', () => {
     const x = useStore.getState().suggestions.find((s) => s.id === a.id)!;
     expect(x.status).toBe('rejected');
     expect(x.failed).toMatch(/edited/);
+  });
+});
+
+describe('story tags', () => {
+  it('turns a helper proposal into a card and applies it as a list', async () => {
+    const [c] = toSuggestions(chat(), [{ type: 'tags', tags: ['noir', ' slow burn ', 'noir'] }], 'helper');
+    expect(c.after).toBe('noir; slow burn');
+    const [x] = await addSuggestions(chat().id, [c]);
+    await accept(x.id);
+    expect(chat().tags).toEqual(['noir', 'slow burn']);
+    expect(tagsBlocks(chat().tags)[0].text).toBe('[Tags: noir; slow burn]');
+    await undo(x.id);
+    expect(chat().tags).toBeUndefined();
   });
 });

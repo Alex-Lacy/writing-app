@@ -98,6 +98,8 @@ export interface Chat {
   summaryAlwaysAsk?: boolean;
   /** Style modules (from the Library) switched on for this chat. */
   styleIds?: string[];
+  /** Story tags: genre, tone, content notes, sent as one compact line. */
+  tags?: string[];
   /** Cliché Filter settings for this chat. */
   filter?: FilterSettings;
 }
@@ -169,7 +171,8 @@ export type SuggestionTarget =
   | { kind: 'passage'; messageId: string; swipe: number; from: number; to: number }
   | { kind: 'style-add'; module: StyleModule }
   | { kind: 'style-edit'; styleId: string; name: string }
-  | { kind: 'style-toggle'; styleId: string; name: string; on: boolean };
+  | { kind: 'style-toggle'; styleId: string; name: string; on: boolean }
+  | { kind: 'tags'; tags: string[] };
 
 export interface Suggestion {
   id: string;

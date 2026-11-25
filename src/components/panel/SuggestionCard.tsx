@@ -27,6 +27,7 @@ function title(x: Suggestion, bookName: (id: string) => string): string {
     case 'passage': return x.source === 'proofread' ? 'Correction' : x.source === 'filter' ? 'Cliché fix' : 'Rewrite';
     case 'style-add': return `New Style module: ${t.module.name}`;
     case 'style-edit': return `Update Style module: ${t.name}`;
+    case 'tags': return 'Story tags';
     case 'style-toggle': return `${t.on ? 'Turn on' : 'Turn off'} Style module: ${t.name}`;
   }
 }

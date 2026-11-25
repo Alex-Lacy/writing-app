@@ -83,7 +83,13 @@ export function summaryBlocks(parts: SummaryPart[] | undefined): ContextBlock[] 
   return text ? [{ id: 'summary', label: 'Story so far', text: `[Story so far:\n${text}]`, placement: { kind: 'top', order: 30 }, source: 'summary' }] : [];
 }
 
+/** Story tags as one compact line, after Background and Style modules. */
+export function tagsBlocks(tags: string[] | undefined): ContextBlock[] {
+  const t = (tags ?? []).map((x) => x.trim()).filter(Boolean);
+  return t.length ? [{ id: 'tags', label: 'Story tags', text: `[Tags: ${t.join('; ')}]`, placement: { kind: 'top', order: 15 }, source: 'tags' }] : [];
+}
+
 /** Style modules switched on for a chat, right after Background. */
 export function styleBlocks(all: StyleModule[] | undefined, ids: string[] | undefined): ContextBlock[] {
-  return (all ?? []).filter((m) => ids?.includes(m.id) && m.text.trim()).map((m, i) => ({ id: `style-${m.id}`, label: m.name, text: m.text.trim(), placement: { kind: 'top', order: 12 + i / 1000 }, source: 'style' }));
+  return (all ?? []).filter((m) => ids?.includes(m.id) && m.text.trim()).map((m, i) => ({ id: `style-${m.id}`, label: m.name, text: m.text.trim(), placement: { kind: 'top', order: 12 + i / 100 }, source: 'style' }));
 }

@@ -3,6 +3,7 @@ import { uid } from '../../lib/id';
 import { currentChat, saveSettings, updateChat, upsertPreset, useStore } from '../../store/store';
 import type { GenParams, WritingSettings } from '../../types';
 import { SummarySection } from './SummarySection';
+import { TagsSection } from './TagsSection';
 import { ui } from '../../store/store';
 
 function StyleToggles() {
@@ -124,6 +125,7 @@ export function SetupTab() {
         </fieldset>
       </section>
       <StyleToggles />
+      <TagsSection />
 
       <section>
         <label className="switch" title="Global notes are written in the Library and go into every chat that has this on.">

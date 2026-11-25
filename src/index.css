@@ -201,10 +201,10 @@ button.stop { background: var(--danger); color: #fff; border-color: var(--danger
 /* context viewer: one colour per source */
 :root {
   --c-system: #8a8f9c; --c-background: #c49a5a; --c-steering: #b77fd1; --c-length: #d4706b;
-  --c-codex: #5fae8c; --c-global: #a0a35a; --c-style: #c9739b; --c-summary: #6aa2c9; --c-user: #4f86c6; --c-assistant: #6f9d6a; --c-other: #777;
+  --c-codex: #5fae8c; --c-global: #a0a35a; --c-style: #c9739b; --c-tags: #d09a3c; --c-summary: #6aa2c9; --c-user: #4f86c6; --c-assistant: #6f9d6a; --c-other: #777;
 }
 .src-system { --c: var(--c-system); } .src-background { --c: var(--c-background); } .src-steering { --c: var(--c-steering); }
-.src-length { --c: var(--c-length); } .src-codex { --c: var(--c-codex); } .src-global { --c: var(--c-global); } .src-style { --c: var(--c-style); } .src-summary { --c: var(--c-summary); }
+.src-length { --c: var(--c-length); } .src-codex { --c: var(--c-codex); } .src-global { --c: var(--c-global); } .src-style { --c: var(--c-style); } .src-tags { --c: var(--c-tags); } .src-summary { --c: var(--c-summary); }
 .src-user { --c: var(--c-user); } .src-assistant { --c: var(--c-assistant); } .src-other { --c: var(--c-other); }
 .cx-modal { width: min(900px, 96vw); }
 .cx-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--bg); border: 1px solid var(--line); margin: 4px 0 10px; }
@@ -294,3 +294,9 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .switch.radio input { margin-top: 3px; }
 .compile-opts { display: grid; gap: 4px; margin-bottom: 8px; }
 .compile-preview { margin-top: 10px; padding: 16px 20px; border: 1px solid var(--line); border-radius: 8px; max-height: 55vh; overflow: auto; font-family: var(--story-font); font-size: calc(var(--story-size) * .9); line-height: var(--story-lh); }
+.tag-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 4px 0; }
+.tag { display: inline-flex; align-items: center; gap: 2px; padding: 1px 2px 1px 8px; border-radius: 999px; background: color-mix(in srgb, var(--c-tags) 20%, var(--bg3)); font-size: 13px; }
+.tag .icon { padding: 0 4px; font-size: 14px; line-height: 1; border: none; }
+.tag-input { flex: 1; min-width: 120px; width: auto; }
+.tag-ideas { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; }
+.tag-ideas .chip { cursor: pointer; }

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { normalizeChat, normalizeWriting, repo } from '../db/db';
 import { buildContext, writingBlocks, type BuildResult, type HistoryItem } from '../context/build';
 import { backstopCut, lengthBlocks } from '../context/length';
-import { CODEX_SCAN, CODEX_SHARE, codexBlocks, globalNotesBlocks, styleBlocks, summaryBlocks, triggeredEntries } from '../context/codex';
+import { CODEX_SCAN, CODEX_SHARE, codexBlocks, globalNotesBlocks, styleBlocks, tagsBlocks, summaryBlocks, triggeredEntries } from '../context/codex';
 import { calibrate, currentCharsPerToken, setCharsPerToken } from '../context/tokens';
 import { friendlyError, streamChat, type ProviderError, type WireMessage } from '../providers/openai';
 import {
@@ -322,6 +322,7 @@ export function buildFor(chat: Chat, msgs: Message[], opts: { continueLast?: boo
       ...globalNotesBlocks(s.settings.globalNotes, chat.globalNotes),
       ...writingBlocks(chat.writing),
       ...styleBlocks(s.settings.styles, chat.styleIds),
+      ...tagsBlocks(chat.tags),
       ...codexBlocks(hits),
       ...summaryBlocks(chat.summary),
       ...lengthBlocks(chat.length),
