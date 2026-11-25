@@ -69,6 +69,91 @@ function gathered(pc: RTCPeerConnection) {
   });
 }
 
+export const PIPE_DEFAULT = 'https://ppng.io';
+
+/**
+ * The fallback when two devices can't reach each other directly: messages stream through a
+ * "piping server" (an open-source relay that passes a request body straight to whoever is
+ * waiting for it, storing nothing). Every message is encrypted with the pairing code's key first,
+ * so the relay only ever sees scrambled bytes.
+ */
+export class RelayChannel {
+  onmessage: ((e: { data: unknown }) => void) | null = null;
+  onclose: (() => void) | null = null;
+  bufferedAmount = 0;
+  private queue: string[] = [];
+  private sending = false;
+  private stop = new AbortController();
+  private url: (dir: 'host' | 'guest', n: number) => string;
+  private key: CryptoKey;
+  private role: 'host' | 'guest';
+  private sent = 0;
+  constructor(base: string, topic: string, key: CryptoKey, role: 'host' | 'guest') {
+    this.url = (dir, n) => `${base.replace(/\/$/, '')}/${topic}-${dir}-${n}`;
+    this.key = key;
+    this.role = role;
+    void this.receive();
+  }
+  send(data: string) {
+    this.queue.push(data);
+    this.bufferedAmount += data.length;
+    void this.flush();
+  }
+  private async flush() {
+    if (this.sending) return;
+    this.sending = true;
+    try {
+      while (this.queue.length && !this.stop.signal.aborted) {
+        const data = this.queue[0];
+        const body = await seal(this.key, data);
+        await retry(() => fetch(this.url(this.role, this.sent), { method: 'POST', body, signal: this.stop.signal }), this.stop.signal);
+        this.queue.shift();
+        this.sent++;
+        this.bufferedAmount -= data.length;
+      }
+    } catch {
+      this.end();
+    } finally {
+      this.sending = false;
+    }
+  }
+  private async receive() {
+    const from = this.role === 'host' ? 'guest' : 'host';
+    try {
+      for (let n = 0; !this.stop.signal.aborted; n++) {
+        const r = await retry(() => fetch(this.url(from, n), { signal: this.stop.signal }), this.stop.signal, Infinity); // waits as long as it takes
+        const data = await open<string>(this.key, await r.text());
+        if (data === undefined) throw new Error('Unreadable message');
+        this.onmessage?.({ data });
+      }
+    } catch {
+      this.end();
+    }
+  }
+  private end() {
+    if (this.stop.signal.aborted) return;
+    this.stop.abort();
+    this.onclose?.();
+  }
+  close() {
+    this.stop.abort();
+  }
+}
+
+/** A request that waits for the other side, retried if the relay drops it while waiting. */
+async function retry(go: () => Promise<Response>, signal: AbortSignal, tries = 6) {
+  for (let i = 1; ; i++) {
+    try {
+      const r = await go();
+      if (r.ok) return r;
+      if (r.status < 500 || i >= tries) throw new Error(`The relay answered ${r.status}.`);
+    } catch (e) {
+      if (signal.aborted || i >= tries || !(e instanceof TypeError)) throw e;
+    }
+    await new Promise((res) => setTimeout(res, Math.min(5000, 1000 * i)));
+  }
+}
+
 /** A message link over a data channel; long messages are split into pieces and joined again. */
 export class Link {
   private parts = new Map<string, string[]>();
@@ -77,12 +162,18 @@ export class Link {
   private waiters: { match: (m: unknown) => boolean; res: (m: unknown) => void }[] = [];
   private listener?: { match: (m: unknown) => boolean; h: (m: unknown) => void };
   onClose?: () => void;
-  private ch: RTCDataChannel;
-  private pc: RTCPeerConnection;
-  constructor(ch: RTCDataChannel, pc: RTCPeerConnection) {
+  private ch: RTCDataChannel | RelayChannel;
+  private pc?: RTCPeerConnection;
+  private size: number;
+  /** Through the relay rather than direct. */
+  readonly relayed: boolean;
+  constructor(ch: RTCDataChannel | RelayChannel, pc?: RTCPeerConnection) {
     this.ch = ch;
     this.pc = pc;
-    ch.onmessage = (e) => this.receive(String(e.data));
+    this.relayed = !pc;
+    // Each relayed message is its own web request, so send big pieces.
+    this.size = pc ? 16_000 : 2_000_000;
+    ch.onmessage = (e: { data: unknown }) => this.receive(String(e.data));
     ch.onclose = () => this.onClose?.();
   }
   private receive(raw: string) {
@@ -127,7 +218,7 @@ export class Link {
   async send(m: unknown) {
     const text = JSON.stringify(m);
     const id = Math.random().toString(36).slice(2);
-    const size = 16_000;
+    const size = this.size;
     const n = Math.max(1, Math.ceil(text.length / size));
     for (let i = 0; i < n; i++) {
       // Don't flood the channel's buffer with big stories.
@@ -137,7 +228,7 @@ export class Link {
   }
   close() {
     this.ch.close();
-    this.pc.close();
+    this.pc?.close();
   }
 }
 
@@ -193,7 +284,7 @@ export function diagnose(mine: Cand[], theirs: Cand[], state: string, role: 'hos
   else if (!theirs.some((x) => x.type === 'host'))
     hint = "The other device didn't share its Wi-Fi address (iPhones and some browsers keep it private unless the page may use the camera). On that device, use \"Share Wi-Fi address\" on its error screen, then sync again.";
   else
-    hint = "Both devices are on the same network but couldn't reach each other directly. Some routers block devices from talking to each other (often called AP or client isolation, common on guest and mesh networks). Try another Wi-Fi, a phone hotspot, or add a TURN relay under Advanced.";
+    hint = "Both devices are on the same network but couldn't reach each other directly. Some routers block devices from talking to each other (often called AP or client isolation, common on guest and mesh networks). Try another Wi-Fi or a phone hotspot, or turn on the relay under Advanced.";
   return { hint, details: lines.join('\n'), noLocal: !mine.some((x) => x.type === 'host') };
 }
 
@@ -201,7 +292,7 @@ export function diagnose(mine: Cand[], theirs: Cand[], state: string, role: 'hos
  * Connects to the other device that has the same code. The host (the device showing the code)
  * posts an offer and waits; the guest (the one typing or scanning it) answers.
  */
-export async function connect(code: string, role: 'host' | 'guest', o: { signal?: AbortSignal; relay?: string; turn?: Turn; onStatus?: (s: string) => void } = {}): Promise<Link> {
+export async function connect(code: string, role: 'host' | 'guest', o: { signal?: AbortSignal; relay?: string; turn?: Turn; pipe?: string | false; onStatus?: (s: string) => void } = {}): Promise<Link> {
   const relay = (o.relay || SIGNAL_DEFAULT).replace(/\/$/, '');
   const { topic, key } = await keysFor(code);
   const pc = new RTCPeerConnection({ iceServers: [{ urls: STUN }, ...(o.turn?.urls ? [o.turn] : [])] });
@@ -258,34 +349,69 @@ export async function connect(code: string, role: 'host' | 'guest', o: { signal?
       o.onStatus?.('Connecting…');
       await post({ from: 'guest', type: 'answer', sdp: pc.localDescription!.sdp, at: Date.now() });
     }
-    const opened = await new Promise<RTCDataChannel>((res, rej) => {
-      const ready = (c: RTCDataChannel) => {
-        if (c.readyState === 'open') {
-          clearTimeout(t);
-          return res(c);
-        }
-        c.onopen = () => {
-          clearTimeout(t);
-          res(c);
+    let opened: RTCDataChannel;
+    try {
+      opened = await new Promise<RTCDataChannel>((res, rej) => {
+        const ready = (c: RTCDataChannel) => {
+          if (c.readyState === 'open') {
+            clearTimeout(t);
+            return res(c);
+          }
+          c.onopen = () => {
+            clearTimeout(t);
+            res(c);
+          };
         };
-      };
-      const states: string[] = [];
-      const give = () => {
-        const d = diagnose(candidates(pc.localDescription?.sdp ?? '', found), candidates(remoteSdp), states.join(' → ') || pc.iceConnectionState, role);
-        rej(new ConnectError(`Couldn't connect the two devices. ${d.hint}`, d.details, d.noLocal));
-      };
-      const t = setTimeout(give, 30_000);
-      pc.addEventListener('iceconnectionstatechange', () => {
-        states.push(pc.iceConnectionState);
-        if (pc.iceConnectionState === 'failed') {
-          clearTimeout(t);
-          give();
-        }
+        const states: string[] = [];
+        const give = async () => {
+          let pairs = '';
+          try {
+            let tried = 0, answered = 0;
+            (await pc.getStats()).forEach((r: { type: string; state?: string; responsesReceived?: number }) => {
+              if (r.type !== 'candidate-pair') return;
+              tried++;
+              if (r.state === 'succeeded' || (r.responsesReceived ?? 0) > 0) answered++;
+            });
+            pairs = `\nAddress pairs tried: ${tried}, answered: ${answered}.`;
+          } catch {
+            /* no stats: leave it out */
+          }
+          const d = diagnose(candidates(pc.localDescription?.sdp ?? '', found), candidates(remoteSdp), states.join(' → ') || pc.iceConnectionState, role);
+          rej(new ConnectError(`Couldn't connect the two devices. ${d.hint}`, d.details + pairs, d.noLocal));
+        };
+        const t = setTimeout(() => void give(), 30_000);
+        pc.addEventListener('iceconnectionstatechange', () => {
+          states.push(pc.iceConnectionState);
+          if (pc.iceConnectionState === 'failed') {
+            clearTimeout(t);
+            void give();
+          }
+        });
+        if (ch) ready(ch);
+        else void incoming.then(ready);
+        o.signal?.addEventListener('abort', () => rej(new DOMException('Cancelled', 'AbortError')));
       });
-      if (ch) ready(ch);
-      else void incoming.then(ready);
-      o.signal?.addEventListener('abort', () => rej(new DOMException('Cancelled', 'AbortError')));
-    });
+    } catch (e) {
+      if (!(e instanceof ConnectError) || o.pipe === false) throw e;
+      // Couldn't reach each other directly: go through the relay instead, still encrypted.
+      pc.close();
+      o.onStatus?.("A direct connection didn't work, so connecting through the relay…");
+      const rc = new RelayChannel(o.pipe || PIPE_DEFAULT, topic, key, role);
+      try {
+        await new Promise<void>((res, rej) => {
+          const t = setTimeout(() => rej(new Error('timeout')), 60_000);
+          rc.onmessage = (m) => m.data === 'hello' && (clearTimeout(t), res());
+          rc.onclose = () => rej(new Error('closed'));
+          o.signal?.addEventListener('abort', () => rej(new DOMException('Cancelled', 'AbortError')));
+          rc.send('hello');
+        });
+      } catch (err) {
+        rc.close();
+        if ((err as Error).name === 'AbortError') throw err;
+        throw new ConnectError(`${e.message} The relay didn't work either.`, e.details, e.noLocal);
+      }
+      return new Link(rc);
+    }
     return new Link(opened, pc);
   } catch (e) {
     pc.close();

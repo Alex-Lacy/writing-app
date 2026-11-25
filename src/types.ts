@@ -307,6 +307,9 @@ export interface AppSettings {
   searchProxy?: string;
   /** Pairing relay for device sync (an ntfy server); ntfy.sh when unset. */
   syncRelay?: string;
+  /** Fallback data relay (a piping server) when devices can't connect directly. */
+  syncPipe?: string;
+  syncPipeOff?: boolean;
   /** Optional TURN relay for devices that can't reach each other directly. */
   syncTurn?: { urls: string; username?: string; credential?: string };
   /** Per-job model overrides (Settings, Models, Advanced). */

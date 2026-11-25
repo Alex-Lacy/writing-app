@@ -68,6 +68,27 @@ export function SetupTab() {
 
   return (
     <div className="panel-body">
+      <details className="section system-prompt">
+        <summary><b>System prompt</b> <span className="muted small">the AI's role and rules</span></summary>
+        <div className="row">
+          <select
+            value={chat.presetId ?? ''}
+            onChange={(e) => {
+              const p = presets.find((x) => x.id === e.target.value);
+              updateChat(p ? { presetId: p.id, systemPrompt: p.systemPrompt } : { presetId: undefined });
+            }}
+          >
+            <option value="">Custom</option>
+            {presets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <button className="ghost small" onClick={() => {
+            const name = prompt('Save this system prompt as a preset named:');
+            if (name) { const p = { id: uid(), name, systemPrompt: chat.systemPrompt }; upsertPreset(p); updateChat({ presetId: p.id }); }
+          }}>Save as preset</button>
+        </div>
+        <textarea rows={6} value={chat.systemPrompt} onChange={(e) => updateChat({ systemPrompt: e.target.value, presetId: undefined })} />
+      </details>
+
       <div className="wt-block src-background">
         <div className="wt-head"><b>Background</b> <em className="muted small">~{estimateTokens(w.background)} tokens</em></div>
         <p className="muted small">Always sent, at the top. For what's always true: premise, characters, setting, style.</p>
@@ -111,27 +132,6 @@ export function SetupTab() {
       </section>
 
       <SummarySection />
-
-      <details className="section">
-        <summary><b>System prompt</b> <span className="muted small">the AI's role and rules</span></summary>
-        <div className="row">
-          <select
-            value={chat.presetId ?? ''}
-            onChange={(e) => {
-              const p = presets.find((x) => x.id === e.target.value);
-              updateChat(p ? { presetId: p.id, systemPrompt: p.systemPrompt } : { presetId: undefined });
-            }}
-          >
-            <option value="">Custom</option>
-            {presets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <button className="ghost small" onClick={() => {
-            const name = prompt('Save this system prompt as a preset named:');
-            if (name) { const p = { id: uid(), name, systemPrompt: chat.systemPrompt }; upsertPreset(p); updateChat({ presetId: p.id }); }
-          }}>Save as preset</button>
-        </div>
-        <textarea rows={6} value={chat.systemPrompt} onChange={(e) => updateChat({ systemPrompt: e.target.value, presetId: undefined })} />
-      </details>
 
       <details className="section">
         <summary><b>Generation settings</b> <span className="muted small">temperature, samplers, hard cap</span></summary>

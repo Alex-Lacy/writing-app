@@ -1,5 +1,5 @@
-// Device sync when the two devices can't reach each other: both sides must show an explanation
-// (the phone used to stay on "Connecting…" forever).
+// Device sync when the two devices can't reach each other directly: first with the relay off, both
+// sides must explain why; then with the relay on, the sync goes through it.
 import { chromium } from 'playwright-core';
 const RELAY = 'http://localhost:8787/ntfy';
 const b = await chromium.launch({ executablePath: process.env.CHROME });
@@ -19,9 +19,11 @@ async function device() {
   await p.getByRole('button', { name: '⇄ Sync devices' }).click();
   await p.locator('.sync details summary').click();
   await p.locator('.sync details input').first().fill(RELAY);
+  await p.getByLabel('Data relay').fill('http://localhost:8787/pipe');
   return p;
 }
 const host = await device(), guest = await device();
+for (const p of [host, guest]) await p.locator('.sync details .switch input').uncheck();
 await host.getByRole('button', { name: 'Show code' }).click();
 const code = (await host.locator('.sync-code .code').innerText({ timeout: 10000 })).trim();
 await guest.locator('.sync-start input').first().fill(code);
@@ -32,4 +34,19 @@ for (const [n, p] of [['desktop', host], ['phone', guest]]) {
   console.log(`${n} after ${Math.round((Date.now() - t) / 1000)}s:`, await p.locator('.sync .error').innerText(), '\n ', (await p.locator('.sync-details').innerText()).replace(/\n/g, ' | '));
 }
 await guest.screenshot({ path: '/tmp/sync-fail.png' });
+// Now with the relay.
+for (const p of [host, guest]) {
+  await p.getByRole('button', { name: 'Try again' }).click();
+  await p.locator('.sync details summary').click();
+  await p.locator('.sync details .switch input').check();
+}
+await host.getByRole('button', { name: 'Show code' }).click();
+const code2 = (await host.locator('.sync-code .code').innerText({ timeout: 10000 })).trim();
+await guest.locator('.sync-start input').first().fill(code2);
+await guest.getByRole('button', { name: 'Connect' }).click();
+
+await host.waitForSelector('.sync .modal-body >> text=Connected to', { timeout: 90000 });
+await host.getByRole('button', { name: /Sync now|Done/ }).click();
+await guest.waitForSelector('.sync .modal-body >> text=/Done|Nothing to change/', { timeout: 60000 });
+console.log('through relay, phone says:', await guest.locator('.sync .modal-body p').first().innerText());
 await b.close();

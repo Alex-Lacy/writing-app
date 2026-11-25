@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import qrcode from 'qrcode-generator';
-import { cleanCode, connect, newCode, shareLocalAddress, SIGNAL_DEFAULT, type ConnectError, type Link } from '../sync/link';
+import { cleanCode, connect, newCode, PIPE_DEFAULT, shareLocalAddress, SIGNAL_DEFAULT, type ConnectError, type Link } from '../sync/link';
 import { guestServe, hostApply, hostCancel, hostReview, lastSnapshotAt, undoLastSync, type Choice } from '../sync/session';
 import { saveSettings, ui, useStore } from '../store/store';
 
@@ -9,7 +9,7 @@ type Stage =
   | { k: 'start' }
   | { k: 'host'; code: string; status: string }
   | { k: 'guest'; status: string }
-  | { k: 'review'; r: Review }
+  | { k: 'review'; r: Review; relayed?: boolean }
   | { k: 'applying' }
   | { k: 'done'; summary: string }
   | { k: 'error'; message: string; details?: string; noLocal?: boolean };
@@ -21,6 +21,9 @@ const pairFromUrl = () => location.hash.match(/pair=([A-Z0-9-]+)/i)?.[1];
 export function SyncModal() {
   const relay = useStore((s) => s.settings.syncRelay ?? '');
   const turn = useStore((s) => s.settings.syncTurn);
+  const pipeUrl = useStore((s) => s.settings.syncPipe ?? '');
+  const pipeOff = useStore((s) => !!s.settings.syncPipeOff);
+  const pipe = pipeOff ? false : pipeUrl;
   const [shared, setShared] = useState('');
   const current = useStore((s) => s.currentChatId);
   const [stage, setStage] = useState<Stage>({ k: 'start' });
@@ -42,11 +45,11 @@ export function SyncModal() {
     abort.current = new AbortController();
     setStage({ k: 'host', code, status: 'Getting ready…' });
     try {
-      link.current = await connect(code, 'host', { relay, turn, signal: abort.current.signal, onStatus: (status) => setStage({ k: 'host', code, status }) });
+      link.current = await connect(code, 'host', { relay, turn, pipe, signal: abort.current.signal, onStatus: (status) => setStage({ k: 'host', code, status }) });
       setStage({ k: 'host', code, status: 'Connected. Comparing stories…' });
       const r = await hostReview(link.current);
       setChoices({});
-      setStage({ k: 'review', r });
+      setStage({ k: 'review', r, relayed: link.current.relayed });
     } catch (e) {
       fail(e);
     }
@@ -57,13 +60,13 @@ export function SyncModal() {
     abort.current = new AbortController();
     setStage({ k: 'guest', status: 'Looking for the other device…' });
     try {
-      link.current = await connect(code, 'guest', { relay, turn, signal: abort.current.signal, onStatus: (status) => setStage({ k: 'guest', status }) });
+      link.current = await connect(code, 'guest', { relay, turn, pipe, signal: abort.current.signal, onStatus: (status) => setStage({ k: 'guest', status }) });
       const summary = await guestServe(link.current, (status) => setStage({ k: 'guest', status }));
       setStage({ k: 'done', summary });
     } catch (e) {
       fail(e);
     }
-  }, [relay, turn, fail]);
+  }, [relay, turn, pipe, fail]);
 
   // Opened from a scanned pairing link: join straight away (once).
   const autoJoin = useRef(pairFromUrl());
@@ -135,10 +138,13 @@ export function SyncModal() {
                 </p>
               )}
               <details className="muted small">
-                <summary>Advanced: pairing relay</summary>
+                <summary>Advanced: relays</summary>
                 <p>The two devices find each other through a free public relay ({SIGNAL_DEFAULT}). It only ever carries an encrypted connection note. You can use your own ntfy server instead.</p>
                 <input value={relay} placeholder={SIGNAL_DEFAULT} onChange={(e) => void saveSettings({ syncRelay: e.target.value.trim() || undefined })} />
-                <p>If your devices can't reach each other directly (different networks, or a router that keeps devices apart), a TURN relay can pass the encrypted connection between them. Services such as Metered or Cloudflare offer free ones; paste the details here on both devices.</p>
+                <label className="switch"><input type="checkbox" checked={!pipeOff} onChange={(e) => void saveSettings({ syncPipeOff: !e.target.checked || undefined })} /> If a direct connection fails, send through a relay</label>
+                <p>The relay ({PIPE_DEFAULT}, an open-source "piping server") passes data straight from one device to the other and keeps nothing. Everything is encrypted with the pairing code first, so it only sees scrambled bytes. You can run your own:</p>
+                <input aria-label="Data relay" placeholder={PIPE_DEFAULT} value={pipeUrl} disabled={pipeOff} onChange={(e) => void saveSettings({ syncPipe: e.target.value.trim() || undefined })} />
+                <p>Instead of that relay you can use a TURN server, the standard kind. Services such as Metered or Cloudflare offer free ones; paste the details here on both devices.</p>
                 <div className="grid3">
                   <input aria-label="TURN address" placeholder="turn:relay.example.com:3478" value={turn?.urls ?? ''} onChange={(e) => void saveSettings({ syncTurn: e.target.value.trim() ? { ...turn, urls: e.target.value.trim() } : undefined })} />
                   <input aria-label="TURN username" placeholder="Username" value={turn?.username ?? ''} disabled={!turn?.urls} onChange={(e) => turn && void saveSettings({ syncTurn: { ...turn, username: e.target.value } })} />
@@ -160,7 +166,7 @@ export function SyncModal() {
           {stage.k === 'guest' && <p className="small"><span className="spinner" /> {stage.status}</p>}
           {stage.k === 'applying' && <p className="small"><span className="spinner" /> Syncing…</p>}
 
-          {stage.k === 'review' && <ReviewList r={stage.r} choices={choices} setChoices={setChoices} only={only} setOnly={setOnly} current={current} onApply={() => void apply(stage.r)} onCancel={close} />}
+          {stage.k === 'review' && <ReviewList relayed={stage.relayed} r={stage.r} choices={choices} setChoices={setChoices} only={only} setOnly={setOnly} current={current} onApply={() => void apply(stage.r)} onCancel={close} />}
 
           {stage.k === 'done' && (
             <>
@@ -196,8 +202,8 @@ const STEP_LABEL: Record<string, string> = {
   'delete-there': '✕ Delete there',
 };
 
-function ReviewList({ r, choices, setChoices, only, setOnly, current, onApply, onCancel }: {
-  r: Review; choices: Record<string, Choice>; setChoices: (c: Record<string, Choice>) => void; only: boolean; setOnly: (v: boolean) => void; current?: string; onApply: () => void; onCancel: () => void;
+function ReviewList({ relayed, r, choices, setChoices, only, setOnly, current, onApply, onCancel }: {
+  relayed?: boolean; r: Review; choices: Record<string, Choice>; setChoices: (c: Record<string, Choice>) => void; only: boolean; setOnly: (v: boolean) => void; current?: string; onApply: () => void; onCancel: () => void;
 }) {
   const shown = r.items.filter((x) => !only || x.id === current);
   const conflicts = shown.filter((x) => x.step === 'conflict');
@@ -205,7 +211,7 @@ function ReviewList({ r, choices, setChoices, only, setOnly, current, onApply, o
   const hasCurrent = r.items.some((x) => x.id === current);
   return (
     <>
-      <p className="small">Connected to <b>{r.peer}</b>. {r.items.length ? 'Here is what will change:' : 'Both devices already match.'}</p>
+      <p className="small">Connected to <b>{r.peer}</b>{relayed && ' through the relay (encrypted)'}. {r.items.length ? 'Here is what will change:' : 'Both devices already match.'}</p>
       {hasCurrent && r.items.length > 1 && (
         <label className="switch small"><input type="checkbox" checked={only} onChange={(e) => setOnly(e.target.checked)} /> Only the story that's open</label>
       )}

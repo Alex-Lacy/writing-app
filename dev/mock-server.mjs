@@ -5,6 +5,7 @@ const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers
 let lastBody = null;
 const ntfy = {};
 const listeners = [];
+const pipes = {};
 http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return res.writeHead(204, cors).end();
   // A tiny ntfy stand-in for sync pairing tests: POST /ntfy/<topic>, GET /ntfy/<topic>/sse.
@@ -26,6 +27,24 @@ http.createServer(async (req, res) => {
     const l = { topic, res };
     listeners.push(l);
     req.on('close', () => listeners.splice(listeners.indexOf(l), 1));
+    return;
+  }
+  // Piping-server stand-in: a POST body goes to whoever GETs the same path (either may come first).
+  if (req.url.startsWith('/pipe/')) {
+    if (process.env.PIPELOG) console.log(req.method, req.url);
+    const path = req.url.split('?')[0];
+    if (req.method === 'OPTIONS') return res.writeHead(204, cors).end();
+    const w = (pipes[path] ??= {});
+    if (req.method === 'POST') {
+      let body = '';
+      for await (const c of req) body += c;
+      const deliver = (r) => { r.writeHead(200, cors).end(body); res.writeHead(200, cors).end('sent'); delete pipes[path]; };
+      if (w.get) return deliver(w.get);
+      w.post = deliver;
+      return;
+    }
+    if (w.post) return w.post(res);
+    w.get = res;
     return;
   }
   if (req.url.endsWith('/last')) return res.writeHead(200, { ...cors, 'Content-Type': 'application/json' }).end(JSON.stringify(lastBody, null, 2));
