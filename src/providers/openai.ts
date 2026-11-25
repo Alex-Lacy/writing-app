@@ -132,11 +132,12 @@ export async function* streamChat(
   messages: WireMessage[],
   params: GenParams,
   signal?: AbortSignal,
+  extra?: Record<string, unknown>,
 ): AsyncGenerator<StreamEvent> {
   const res = await fetch(`${base(p)}/chat/completions`, {
     method: 'POST',
     headers: headers(p),
-    body: JSON.stringify(buildBody(model, messages, params, true)),
+    body: JSON.stringify({ ...buildBody(model, messages, params, true), ...extra }),
     signal,
   });
   if (!res.ok) throw await errorFrom(res);

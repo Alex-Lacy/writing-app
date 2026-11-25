@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 import { renderMarkdown } from '../lib/markdown';
 import {
-  deleteFrom, deleteMessage, deleteSwipe, editMessage, modelLabel, regenerate, swipe, useStore,
+  continueReply, deleteFrom, deleteMessage, deleteSwipe, editMessage, modelLabel, regenerate, swipe, useStore,
 } from '../store/store';
 import { activeSwipe, type Message } from '../types';
 
@@ -76,7 +76,19 @@ export const MessageItem = memo(function MessageItem({ m, isLast, outOfContext }
       )}
 
       {sw.error && <div className="msg-error">⚠ {sw.error}</div>}
-      {sw.finishReason === 'length' && <div className="msg-note">Stopped at the max-tokens limit.</div>}
+      {sw.finishReason === 'length' && !streaming && (
+        sw.content.trim() ? (
+          <div className="msg-note">
+            Stopped at the length limit.{' '}
+            {isLast && <button className="small" disabled={busy} onClick={() => continueReply(m.id)}>Continue</button>}
+          </div>
+        ) : (
+          <div className="msg-note">
+            Ran out of room while thinking, before writing a reply. Press Retry: replies can now use all the space left in
+            the context. If it keeps happening, raise "Reply room" in chat settings.
+          </div>
+        )
+      )}
 
       {!editing && !streaming && (
         <div className="msg-actions">

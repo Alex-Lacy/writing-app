@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { buildFor, contextLimitFor, currentChat, useStore } from '../store/store';
+import { buildFor, contextLimitFor, currentChat, replyReserve, sendMaxTokens, useStore } from '../store/store';
 
 export function ContextPanel() {
   const chat = useStore((s) => currentChat(s));
@@ -16,7 +16,7 @@ export function ContextPanel() {
     <div className="panel-body">
       <p className="muted small">
         {streaming ? 'Being sent now.' : 'What the next generation will send.'} Estimates: system+memory ~{t.top}, notes ~{t.blocks},
-        history ~{t.history}, total ~{t.total} of {limit} (reply reserve {chat.params.maxTokens}).
+        history ~{t.history}, total ~{t.total} of {limit} (reply room {replyReserve(chat)}; the reply may use up to ~{sendMaxTokens(chat, ctx)} tokens).
         {ctx.droppedIds.length > 0 && <> <b>{ctx.droppedIds.length} older messages don't fit</b> and are left out.</>}
         {ctx.overflow && <> <b>The latest message alone exceeds the budget.</b></>}
       </p>

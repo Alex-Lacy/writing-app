@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { repo } from '../db/db';
 import { buildContext, writingBlocks, type BuildResult, type HistoryItem } from '../context/build';
-import { friendlyError, streamChat, type WireMessage } from '../providers/openai';
+import { friendlyError, streamChat, type ProviderError, type WireMessage } from '../providers/openai';
 import {
   activeSwipe, DEFAULT_SETTINGS, FEATHERLESS_PRESET,
   type AppSettings, type Chat, type Message, type ModelEntry, type Preset, type ProviderConfig, type Swipe,
@@ -218,9 +218,24 @@ export function buildFor(chat: Chat, msgs: Message[]): BuildResult {
     blocks: [...writingBlocks(chat.writing) /* Phase 2: lorebook, summary */],
     history: historyItems(msgs),
     contextLimit: contextLimitFor(chat, s),
-    maxTokens: chat.params.maxTokens,
+    maxTokens: replyReserve(chat, s),
     safetyMargin: s.settings.safetyMargin,
   });
+}
+
+/** Thinking models spend thousands of tokens reasoning before they write, so keep more room for them. */
+export const THINKING_RESERVE = 6144;
+export function replyReserve(chat: Chat, s: State = get()) {
+  const m = modelFor(chat, s);
+  return m?.thinking ? Math.max(chat.params.maxTokens, THINKING_RESERVE) : chat.params.maxTokens;
+}
+
+/** max_tokens actually sent: with auto on, everything left in the context window after the prompt. */
+export function sendMaxTokens(chat: Chat, ctx: BuildResult, s: State = get()) {
+  const reserve = replyReserve(chat, s);
+  if (chat.params.autoMaxTokens === false) return chat.params.maxTokens;
+  const room = contextLimitFor(chat, s) - s.settings.safetyMargin - ctx.tokens.total;
+  return Math.max(reserve, Math.floor(room));
 }
 
 export async function send(text: string) {
@@ -238,7 +253,7 @@ export async function send(text: string) {
  * Generates a reply. With `targetId` (an assistant message) a new swipe is added to it using
  * the history before it; otherwise a new assistant message is appended.
  */
-export async function generate(targetId?: string) {
+export async function generate(targetId?: string, opts: { continueId?: string } = {}) {
   const chat = currentChat();
   if (!chat || get().streamingId) return;
   const model = modelFor(chat);
@@ -255,7 +270,12 @@ export async function generate(targetId?: string) {
   const all = get().messages;
   let target: Message;
   let history: Message[];
-  if (targetId) {
+  const cont = opts.continueId ? all.find((m) => m.id === opts.continueId) : undefined;
+  if (cont) {
+    // Continue: send everything up to and including this reply, and append to its active version.
+    target = cont;
+    history = all.slice(0, all.indexOf(cont) + 1);
+  } else if (targetId) {
     const idx = all.findIndex((m) => m.id === targetId);
     target = all[idx];
     history = all.slice(0, idx);
@@ -268,11 +288,12 @@ export async function generate(targetId?: string) {
   }
 
   const ctx = buildFor(chat, history);
+  const params = { ...chat.params, maxTokens: sendMaxTokens(chat, ctx) };
   set({ lastContext: ctx, streamingId: target.id, error: undefined });
   abort = new AbortController();
 
   const si = target.activeSwipe;
-  let swipe: Swipe = target.swipes[si];
+  let swipe: Swipe = cont ? { ...target.swipes[si], finishReason: undefined, error: undefined } : target.swipes[si];
   let lastPaint = 0;
   const paint = (force = false) => {
     const now = performance.now();
@@ -283,13 +304,39 @@ export async function generate(targetId?: string) {
     set({ messages: get().messages.map((x) => (x.id === t.id ? t : x)) });
   };
 
-  try {
-    for await (const ev of streamChat(provider, model.modelId, ctx.messages as WireMessage[], chat.params, abort.signal)) {
+  const run = async (extra?: Record<string, unknown>): Promise<void> => {
+    try {
+      await runOnce(extra);
+    } catch (e) {
+      // Our token count is an estimate. If the server says the request is too long, retry once
+      // with only the reserved reply room.
+      const err = e as ProviderError;
+      if (err.status === 400 && /max_tokens|max_completion_tokens|context length|maximum context|too long/i.test(err.message) && params.maxTokens > replyReserve(chat) && !swipe.content && !swipe.reasoning) {
+        params.maxTokens = replyReserve(chat);
+        await runOnce(extra);
+      } else throw e;
+    }
+  };
+  const runOnce = async (extra?: Record<string, unknown>) => {
+    for await (const ev of streamChat(provider, model.modelId, ctx.messages as WireMessage[], params, abort!.signal, extra)) {
       if (ev.type === 'content') swipe = { ...swipe, content: swipe.content + ev.text };
       else if (ev.type === 'reasoning') swipe = { ...swipe, reasoning: (swipe.reasoning ?? '') + ev.text };
       else swipe = { ...swipe, finishReason: ev.finishReason };
       paint();
     }
+  };
+
+  try {
+    if (cont) {
+      // vLLM-style servers (Featherless) continue a trailing assistant message with these flags.
+      // Servers that reject them get a plain request, which still adds on to the reply.
+      try {
+        await run({ continue_final_message: true, add_generation_prompt: false });
+      } catch (e) {
+        if ((e as ProviderError).status === 400) await run();
+        else throw e;
+      }
+    } else await run();
   } catch (e) {
     const aborted = (e as Error).name === 'AbortError';
     if (!aborted) {
@@ -304,6 +351,11 @@ export async function generate(targetId?: string) {
     await repo.put('messages', target);
     await updateChat({}, chat.id);
   }
+}
+
+/** Continues a reply that stopped at the token limit. */
+export async function continueReply(id: string) {
+  return generate(undefined, { continueId: id });
 }
 
 export function stop() {

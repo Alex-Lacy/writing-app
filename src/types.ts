@@ -33,7 +33,10 @@ export interface Preset {
 }
 
 export interface GenParams {
+  /** Room always kept free for the reply when fitting history. */
   maxTokens: number;
+  /** Let the reply use all remaining context instead of stopping at maxTokens (default on). Needed for thinking models, whose reasoning counts against the limit. */
+  autoMaxTokens?: boolean;
   temperature?: number;
   topP?: number;
   minP?: number;
@@ -123,7 +126,7 @@ export const DEFAULT_WRITING: WritingSettings = {
   anRole: 'system',
 };
 
-export const DEFAULT_PARAMS: GenParams = { maxTokens: 1024, temperature: 0.8 };
+export const DEFAULT_PARAMS: GenParams = { maxTokens: 2048, autoMaxTokens: true, temperature: 0.8 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
   defaultParams: DEFAULT_PARAMS,

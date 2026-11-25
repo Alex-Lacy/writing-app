@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { saveSettings, buildFor, contextLimitFor, currentChat, modelLabel, ui, updateChat, useStore } from '../store/store';
+import { replyReserve, saveSettings, buildFor, contextLimitFor, currentChat, modelLabel, ui, updateChat, useStore } from '../store/store';
 
 export function TopBar() {
   const chat = useStore((s) => currentChat(s));
@@ -38,7 +38,7 @@ export function TopBar() {
       {chat && (
         <div
           className={`meter${stats?.droppedIds.length ? ' warn' : ''}`}
-          title={`~${used.toLocaleString()} prompt tokens + ${chat.params.maxTokens} reply of ${limit.toLocaleString()}${stats?.droppedIds.length ? `. ${stats.droppedIds.length} older messages don't fit.` : ''}`}
+          title={`~${used.toLocaleString()} prompt tokens + ${replyReserve(chat)} kept for the reply, of ${limit.toLocaleString()}${stats?.droppedIds.length ? `. ${stats.droppedIds.length} older messages don't fit.` : ''}`}
           onClick={() => ui.setPanel('context')}
         >
           <div className="meter-bar"><div style={{ width: `${pct}%` }} /></div>

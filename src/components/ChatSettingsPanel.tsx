@@ -54,7 +54,7 @@ export function ChatSettingsPanel() {
       <section>
         <h3>Generation</h3>
         <div className="grid2">
-          <NumField label="Max reply tokens" value={chat.params.maxTokens} step={64} min={16} onChange={(v) => setParams({ maxTokens: v ?? 1024 })} />
+          <NumField label="Reply room (tokens)" hint="Always kept free for the reply when older messages are trimmed. Thinking models get at least 6,144." value={chat.params.maxTokens} step={256} min={16} onChange={(v) => setParams({ maxTokens: v ?? 2048 })} />
           <NumField label="Temperature" value={chat.params.temperature} min={0} max={5} onChange={(v) => setParams({ temperature: v })} />
           <NumField label="Top P" value={chat.params.topP} min={0} max={1} onChange={(v) => setParams({ topP: v })} />
           <NumField label="Min P" value={chat.params.minP} min={0} max={1} onChange={(v) => setParams({ minP: v })} />
@@ -63,6 +63,10 @@ export function ChatSettingsPanel() {
           <NumField label="Frequency pen." value={chat.params.frequencyPenalty} min={-2} max={2} onChange={(v) => setParams({ frequencyPenalty: v })} />
           <NumField label="Presence pen." value={chat.params.presencePenalty} min={-2} max={2} onChange={(v) => setParams({ presencePenalty: v })} />
         </div>
+        <label className="switch small" title="Off: replies stop at exactly the Reply room number.">
+          <input type="checkbox" checked={chat.params.autoMaxTokens !== false} onChange={(e) => setParams({ autoMaxTokens: e.target.checked })} />
+          Let replies use all remaining context (recommended, needed for thinking models)
+        </label>
         <button className="ghost small" onClick={() => saveSettings({ defaultParams: chat.params })}>Use as default for new chats</button>
       </section>
 

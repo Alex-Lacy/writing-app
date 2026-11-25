@@ -16,6 +16,18 @@ http.createServer(async (req, res) => {
   const j = JSON.parse(body);
   lastBody = j;
   const last = j.messages.at(-1);
+  if (j.continue_final_message) {
+    res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream' });
+    res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: ' and then it continued.' } }] })}\n\n`);
+    res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`);
+    return res.end('data: [DONE]\n\n');
+  }
+  if (String(last.content).includes('LONG')) {
+    res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream' });
+    res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: 'A story that was cut' } }] })}\n\n`);
+    res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }] })}\n\n`);
+    return res.end('data: [DONE]\n\n');
+  }
   const text = `You said: "${String(typeof last.content === 'string' ? last.content : '').slice(0, 80)}". The prompt had ${j.messages.length} messages. **Bold** and a second paragraph.\n\nThe end.`;
   res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream' });
   const chunks = j.model.includes('reasoner') ? ['<thi', 'nk>Let me think about', ' this carefully.</think>\n\n', ...text.match(/.{1,6}/gs)] : text.match(/.{1,6}/gs);
