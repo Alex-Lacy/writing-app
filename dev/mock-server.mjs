@@ -16,6 +16,24 @@ http.createServer(async (req, res) => {
   const j = JSON.parse(body);
   lastBody = j;
   const last = j.messages.at(-1);
+  const sys = String(j.messages[0]?.content ?? '');
+  const reply = async (text) => {
+    res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream' });
+    for (const c of text.match(/[\s\S]{1,20}/g)) {
+      res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: c } }] })}\n\n`);
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: Math.round(body.length / 3.6), completion_tokens: 50 } })}\n\n`);
+    res.end('data: [DONE]\n\n');
+  };
+  // Side jobs, recognised by their system prompts.
+  if (sys.includes('maintain the notes for a piece of fiction'))
+    return reply(JSON.stringify({ suggestions: [{ type: 'codex-add', name: 'Captain Rell', keys: ['Rell', 'captain'], text: 'Harbour captain; owes Mara a favour.', reason: 'New recurring character.' }] }));
+  if (sys.includes('You write recaps of a story'))
+    return reply('Mara arrived at the harbour and met Captain Rell, who agreed to help her find the ship.');
+  if (sys.includes('```changes'))
+    return reply('Here is a setup for your story.\n\n```changes\n[{"type":"title","text":"Harbour Lights"},{"type":"background","text":"Mara Voss, a detective, hunts a smuggler in a rain-soaked port city."},{"type":"steering","text":"[Tone: noir, tense. Third person, past tense.]"},{"type":"codex-add","name":"Captain Rell","keys":["Rell"],"text":"Harbour captain."},{"type":"length","value":"scene"}]\n```');
+  if (sys.includes('You condense writing-style instructions')) return reply('Short version.');
   if (j.continue_final_message) {
     res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream' });
     res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: ' and then it continued.' } }] })}\n\n`);

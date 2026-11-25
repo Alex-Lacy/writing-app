@@ -1,0 +1,58 @@
+import { chromium } from 'playwright-core';
+const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const p = await b.newPage({ viewport: { width: 1280, height: 860 } });
+const errs = [];
+p.on('pageerror', (e) => errs.push(e.message));
+p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
+await p.goto('http://127.0.0.1:5173');
+await p.waitForSelector('.modal');
+const card = p.locator('.card').first();
+await card.locator('input').nth(0).fill('Mock');
+await card.locator('input').nth(2).fill('http://localhost:8787/v1');
+await card.locator('input[type=password]').fill('test-key');
+await card.getByText('Test connection').click();
+await p.waitForSelector('text=Connected, 2 models');
+await card.getByText('Pick models').click();
+await p.getByText('Fetch model list').click();
+await p.locator('.remote-row button').nth(0).click();
+await p.locator('.modal-head .icon').click();
+// New story -> helper
+await p.getByRole('button', { name: '+ New story' }).click();
+await p.waitForTimeout(800); await p.screenshot({ path: '/tmp/p2-dbg.png' }); console.log('errs', errs.map(e=>e.slice(0,300))); await p.waitForSelector('.helper');
+console.log('helper select:', await p.locator('.helper select').inputValue());
+await p.locator('.helper-input textarea').fill('A noir detective story in a port city');
+await p.keyboard.press('Enter');
+await p.waitForSelector('.helper .sg-card');
+console.log('cards:', await p.locator('.helper .sg-card').count());
+await p.screenshot({ path: '/tmp/p2-helper.png' });
+for (let i = 0; i < 5; i++) await p.locator('.helper .sg-card button:has-text("Accept")').first().click().catch(() => {});
+await p.waitForTimeout(300);
+console.log('title:', await p.locator('.chat-item.active .chat-title').innerText());
+await p.locator('.panel-tabs button:has-text("Setup")').click();
+console.log('background:', await p.locator('textarea[placeholder^="Story premise"]').inputValue());
+await p.locator('.panel-tabs button:has-text("Codex")').click();
+console.log('codex entries:', await p.locator('.cx-entry').count());
+await p.screenshot({ path: '/tmp/p2-codex.png' });
+// Undo one
+await p.locator('.panel-tabs button:has-text("Suggestions")').click();
+await p.locator('select').filter({ hasText: 'After every reply' }).selectOption('1');
+await p.locator('.composer textarea').fill('Mara walks to the docks and meets Rell.');
+await p.keyboard.press('Enter');
+await p.waitForSelector('.msg-assistant >> text=The end.');
+await p.waitForFunction(() => document.querySelector('.panel-tabs .badge'), null, { timeout: 8000 }).catch(() => {});
+console.log('badge:', await p.locator('.panel-tabs .badge').innerText().catch(() => 'none'));
+const last = await (await fetch('http://localhost:8787/v1/last')).json();
+console.log('last job sys starts:', String(last.messages[0].content).slice(0, 60));
+// check context of a story request
+await p.screenshot({ path: '/tmp/p2-sugg.png' });
+// Library
+await p.getByRole('button', { name: '📚 Library' }).click(); await p.waitForTimeout(300); await p.screenshot({ path: '/tmp/p2-libdbg.png' });
+await p.locator('.modal .tab:has-text("Style modules")').click();
+console.log('styles:', await p.locator('.lib-item').count());
+await p.screenshot({ path: '/tmp/p2-lib.png' });
+await p.locator('.modal-head .icon').click();
+// Context modal
+await p.locator('.meter').click();
+console.log('legend:', (await p.locator('.cx-legend').innerText()).replace(/\n/g, ' | '));
+console.log('errors:', errs);
+await b.close();

@@ -35,7 +35,7 @@ export function ChatView() {
         {messages.length === 0 && (
           <div className="empty">
             <h2>{chat ? 'Start writing' : 'Writing Studio'}</h2>
-            <p>Pick a model up top, set a system prompt or turn on Writing tools in the chat settings, then send a message.</p>
+            <p>Pick a model up top, then just start typing. For a guided setup, use <b>+ New story</b> or the Helper in the Story panel (☰).</p>
           </div>
         )}
         {messages.map((m, i) => (

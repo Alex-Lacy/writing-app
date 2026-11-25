@@ -1,7 +1,7 @@
 import type { ContextBlock } from './build';
 
 /**
- * Response length buckets. The model gets a soft instruction (placed with the Author's Note),
+ * Response length buckets. The model gets a soft instruction (placed with the Steering),
  * and a backstop watches only the reply text (never the reasoning) and ends the reply cleanly
  * at a sentence or paragraph end if it runs far past the target.
  */

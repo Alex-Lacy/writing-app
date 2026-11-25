@@ -51,7 +51,7 @@ beforeEach(async () => {
 
 describe('Continue', () => {
   it('keeps the half reply last when Length and the Author\'s Note are on', async () => {
-    await updateChat({ length: 'scene', writing: { ...useStore.getState().chats[0].writing, enabled: true, authorsNote: 'Dark tone', anRole: 'inline', anDepth: 1 } });
+    await updateChat({ length: 'scene', writing: { ...useStore.getState().chats[0].writing, enabled: true, steering: 'Dark tone', steeringMode: 'inline', steeringDepth: 1 } });
     feed = words('Half a reply');
     await send('Write a scene.');
     feed = words(' and the rest.');

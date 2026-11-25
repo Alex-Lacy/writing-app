@@ -5,7 +5,7 @@ import { estimateTokens, MESSAGE_OVERHEAD } from './tokens';
 /**
  * Context assembly pipeline.
  *
- * Every piece of injected text (Memory, Author's Note, the length instruction, and later
+ * Every piece of injected text (Background, Steering, the length instruction, and later
  * lorebook entries, the condensed-history summary, search results) is a ContextBlock produced
  * by a contributor. The builder places blocks, fits history into the token budget newest-first,
  * and returns both the wire messages and an annotated copy (which part came from where, in
@@ -27,7 +27,7 @@ export type Placement =
   | { kind: 'tail' };
 
 /** Where a piece of context came from; drives colours in the context viewer. */
-export type Source = 'system' | 'memory' | 'authors-note' | 'length' | 'lore' | 'summary' | 'user' | 'assistant' | 'other';
+export type Source = 'system' | 'global' | 'background' | 'style' | 'steering' | 'length' | 'codex' | 'summary' | 'user' | 'assistant' | 'other';
 
 export interface ContextBlock {
   id: string;
@@ -85,6 +85,8 @@ export interface BuildResult {
   tokens: { top: number; blocks: number; history: number; total: number; budget: number };
   /** The latest message alone exceeds the budget. */
   overflow: boolean;
+  /** Codex entries that matched but didn't fit the Codex budget. */
+  codexDropped?: string[];
 }
 
 const textOf = (c: WireMessage['content']) =>
@@ -96,11 +98,13 @@ const tokensOf = (c: WireMessage['content']) =>
 
 const SOURCE_LABEL: Record<Source, string> = {
   system: 'System prompt',
-  memory: 'Memory',
-  'authors-note': "Author's Note",
+  background: 'Background',
+  'steering': 'Steering',
   length: 'Length instruction',
-  lore: 'Lorebook',
-  summary: 'Story summary',
+  codex: 'Codex',
+  summary: 'Story so far',
+  global: 'Global notes',
+  style: 'Style module',
   user: 'Your message',
   assistant: 'AI reply',
   other: 'Other',
@@ -108,25 +112,25 @@ const SOURCE_LABEL: Record<Source, string> = {
 /** Chip label: the same name the legend uses, except lore entries keep their own names. */
 const labelOf = (b: ContextBlock): string => {
   const src = sourceOf(b);
-  return src === 'lore' || src === 'other' ? b.label : SOURCE_LABEL[src];
+  return src === 'codex' || src === 'other' ? b.label : SOURCE_LABEL[src];
 };
 export const sourceLabel = (s: Source) => SOURCE_LABEL[s];
 
 const sourceOf = (b: ContextBlock): Source =>
-  b.source ?? (b.id === 'memory' ? 'memory' : b.id === 'authors-note' ? 'authors-note' : b.id === 'length' ? 'length' : 'other');
+  b.source ?? (b.id === 'background' ? 'background' : b.id === 'steering' ? 'steering' : b.id === 'length' ? 'length' : 'other');
 
-/** Contributor for the writing toggle: Memory and Author's Note. */
+/** Contributor for the writing toggle: Background and Steering. */
 export function writingBlocks(w: WritingSettings | undefined): ContextBlock[] {
   if (!w?.enabled) return [];
   const out: ContextBlock[] = [];
-  if (w.memory.trim()) out.push({ id: 'memory', label: 'Memory', text: w.memory.trim(), placement: { kind: 'top', order: 10 }, source: 'memory' });
-  if (w.authorsNote.trim())
+  if (w.background.trim()) out.push({ id: 'background', label: 'Background', text: w.background.trim(), placement: { kind: 'top', order: 10 }, source: 'background' });
+  if (w.steering.trim())
     out.push({
-      id: 'authors-note',
-      label: "Author's Note",
-      text: w.authorsNote.trim(),
-      placement: { kind: 'depth', depth: Math.max(1, Math.floor(w.anDepth || 1)), mode: w.anRole === 'system' ? 'system' : 'inline' },
-      source: 'authors-note',
+      id: 'steering',
+      label: 'Steering',
+      text: w.steering.trim(),
+      placement: { kind: 'depth', depth: Math.max(1, Math.floor(w.steeringDepth || 1)), mode: w.steeringMode === 'system' ? 'system' : 'inline' },
+      source: 'steering',
     });
   return out;
 }

@@ -9,7 +9,7 @@ describe('buildContext', () => {
   it('puts system prompt and memory in one leading system message', () => {
     const r = buildContext({
       systemPrompt: 'SYS',
-      blocks: writingBlocks({ ...DEFAULT_WRITING, enabled: true, memory: 'MEM' }),
+      blocks: writingBlocks({ ...DEFAULT_WRITING, enabled: true, background: 'MEM' }),
       history: hist(2),
       contextLimit: 32768, maxTokens: 512, safetyMargin: 0,
     });
@@ -18,13 +18,13 @@ describe('buildContext', () => {
   });
 
   it('ignores writing blocks when the toggle is off', () => {
-    expect(writingBlocks({ ...DEFAULT_WRITING, memory: 'MEM', authorsNote: 'AN' })).toEqual([]);
+    expect(writingBlocks({ ...DEFAULT_WRITING, background: 'MEM', steering: 'AN' })).toEqual([]);
   });
 
-  it("inserts the Author's Note just before the latest message at depth 1", () => {
+  it("inserts the Steering just before the latest message at depth 1", () => {
     const r = buildContext({
       systemPrompt: '',
-      blocks: writingBlocks({ ...DEFAULT_WRITING, enabled: true, authorsNote: 'AN', anDepth: 1, anRole: 'system' }),
+      blocks: writingBlocks({ ...DEFAULT_WRITING, enabled: true, steering: 'AN', steeringDepth: 1, steeringMode: 'system' }),
       history: hist(4),
       contextLimit: 32768, maxTokens: 512, safetyMargin: 0,
     });
@@ -35,12 +35,12 @@ describe('buildContext', () => {
   it('inline mode merges the note into the next message to keep strict role alternation', () => {
     const r = buildContext({
       systemPrompt: '',
-      blocks: writingBlocks({ ...DEFAULT_WRITING, enabled: true, authorsNote: 'AN', anDepth: 2, anRole: 'inline' }),
+      blocks: writingBlocks({ ...DEFAULT_WRITING, enabled: true, steering: 'AN', steeringDepth: 2, steeringMode: 'inline' }),
       history: hist(3),
       contextLimit: 32768, maxTokens: 512, safetyMargin: 0,
     });
     expect(r.messages).toHaveLength(3);
-    expect(String(r.messages[2].content)).toMatch(/^\[Author's Note: AN\]/); // skips the AI reply at depth 2
+    expect(String(r.messages[2].content)).toMatch(/^\[Steering: AN\]/); // skips the AI reply at depth 2
   });
 
   it('drops oldest history to fit the budget but keeps the latest message', () => {
@@ -66,14 +66,14 @@ describe('shared depth', () => {
     const { lengthBlocks } = await import('./length');
     const r = buildContext({
       systemPrompt: 'SYS',
-      blocks: [...writingBlocks({ ...DEFAULT_WRITING, enabled: true, authorsNote: 'AN' }), ...lengthBlocks('short')],
+      blocks: [...writingBlocks({ ...DEFAULT_WRITING, enabled: true, steering: 'AN' }), ...lengthBlocks('short')],
       history: hist(3),
       contextLimit: 32768, maxTokens: 512, safetyMargin: 0,
     });
     expect(r.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user']);
-    expect(String(r.messages[3].content)).toMatch(/^\[Author's Note: AN\]\n\nmsg2 x+\n\n\[Length: Reply in about 150 words/);
-    expect(r.annotated[3].parts.map((p) => p.source)).toEqual(['authors-note', 'user', 'length']);
-    expect(r.totals.map((t) => t.source)).toEqual(['system', 'user', 'assistant', 'authors-note', 'length']);
+    expect(String(r.messages[3].content)).toMatch(/^\[Steering: AN\]\n\nmsg2 x+\n\n\[Length: Reply in about 150 words/);
+    expect(r.annotated[3].parts.map((p) => p.source)).toEqual(['steering', 'user', 'length']);
+    expect(r.totals.map((t) => t.source)).toEqual(['system', 'user', 'assistant', 'steering', 'length']);
   });
 
   it('adds a user message for the length instruction when the chat ends on a reply', async () => {
@@ -88,18 +88,18 @@ describe('inline notes never go into AI replies', () => {
   it('moves the note to a new user message when the chat ends on a reply', () => {
     const r = buildContext({
       systemPrompt: '',
-      blocks: writingBlocks({ ...DEFAULT_WRITING, enabled: true, authorsNote: 'AN', anDepth: 1, anRole: 'inline' }),
+      blocks: writingBlocks({ ...DEFAULT_WRITING, enabled: true, steering: 'AN', steeringDepth: 1, steeringMode: 'inline' }),
       history: hist(2),
       contextLimit: 32768, maxTokens: 512, safetyMargin: 0,
     });
     expect(r.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
-    expect(r.messages[2].content).toBe("[Author's Note: AN]");
+    expect(r.messages[2].content).toBe("[Steering: AN]");
   });
 });
 
 describe('buildContext in Continue mode', () => {
   const blocks = [
-    ...writingBlocks({ ...DEFAULT_WRITING, enabled: true, authorsNote: 'AN', anDepth: 1, anRole: 'inline' }),
+    ...writingBlocks({ ...DEFAULT_WRITING, enabled: true, steering: 'AN', steeringDepth: 1, steeringMode: 'inline' }),
     { id: 'length', label: 'Length', source: 'length' as const, text: '[Length: one scene]', placement: { kind: 'tail' as const } },
   ];
   const history: HistoryItem[] = [

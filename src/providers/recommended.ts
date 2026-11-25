@@ -24,7 +24,7 @@ const UNC = 'Uncensored creative (fiction and roleplay fine-tunes)';
 const FAST = 'Small and fast';
 const GEN = 'General, reasoning, vision and tools';
 
-const FEATHERLESS: RecommendedModel[] = [
+export const RECOMMENDED_FEATHERLESS: RecommendedModel[] = [
   // Flagships. These rank highest on creative-writing and roleplay benchmarks.
   { group: TOP, id: 'moonshotai/Kimi-K3', nickname: 'Kimi K3', note: '#1 on AI Roleplay Bench. Elegant, rhythmic prose; characters hold their ground. A little cautious with explicit scenes.', contextLength: 262144, vision: true, tools: true, thinking: 'always', cost: 4 },
   { group: TOP, id: 'zai-org/GLM-5.3', nickname: 'GLM 5.3', note: 'Best open model for prose and long-story consistency; natural dialogue, few clichés. Stricter about explicit romance than older GLMs.', contextLength: 262144, tools: true, thinking: 'always', cost: 4 },
@@ -58,6 +58,6 @@ const FEATHERLESS: RecommendedModel[] = [
 ];
 
 export function recommendedFor(baseUrl: string): RecommendedModel[] {
-  if (/featherless\.ai/i.test(baseUrl)) return FEATHERLESS;
+  if (/featherless\.ai/i.test(baseUrl)) return RECOMMENDED_FEATHERLESS;
   return [];
 }

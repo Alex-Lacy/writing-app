@@ -9,6 +9,8 @@ export function TopBar() {
   const streaming = useStore((s) => !!s.streamingId);
   const panel = useStore((s) => s.panel);
   const limit = useStore((s) => contextLimitFor(currentChat(s), s));
+  const jobs = useStore((s) => s.jobs);
+  const pending = useStore((s) => s.suggestions.filter((x) => x.chatId === s.currentChatId && x.status === 'pending').length);
 
   const stats = useMemo(() => (chat && !streaming ? buildFor(chat, messages) : undefined), [chat, messages, streaming]);
   const used = stats ? stats.tokens.total : 0;
@@ -46,11 +48,21 @@ export function TopBar() {
         </div>
       )}
       {chat && (
-        <button className={`toggle${chat.writing.enabled ? ' on' : ''}`} onClick={() => updateChat({ writing: { ...chat.writing, enabled: !chat.writing.enabled } })} title="Writing tools (Memory, Author's Note)">
+        <button className={`toggle${chat.writing.enabled ? ' on' : ''}`} onClick={() => updateChat({ writing: { ...chat.writing, enabled: !chat.writing.enabled } })} title="Writing tools (Background, Steering)">
           ✎<span className="label"> Writing</span>
         </button>
       )}
-      {chat && <button className={`icon${panel === 'chat-settings' ? ' active' : ''}`} onClick={() => ui.setPanel('chat-settings')} title="Chat settings">⚙</button>}
+      {chat && (
+        <button className={`toggle small${chat.autoSummary !== false ? ' on' : ''}`} onClick={() => updateChat({ autoSummary: chat.autoSummary === false })} title="Auto-summary: when the story nears the context limit, older messages are summarised so nothing important falls out. Click to switch.">
+          Σ<span className="label"> Auto-summary {chat.autoSummary !== false ? 'on' : 'off'}</span>
+        </button>
+      )}
+      {jobs.length > 0 && <span className="jobs muted small" title={jobs.map((j) => j.label).join(', ')}>⟳ {jobs[0].label}…</span>}
+      {chat && (
+        <button className={`icon panel-btn${panel === 'chat-settings' ? ' active' : ''}`} onClick={() => (pending ? ui.openPanel('suggestions') : ui.setPanel('chat-settings'))} title={pending ? `${pending} suggestions to review` : 'Story panel: setup, Codex, Helper, suggestions'}>
+          ☰{pending > 0 && <span className="badge">{pending}</span>}
+        </button>
+      )}
     </header>
   );
 }

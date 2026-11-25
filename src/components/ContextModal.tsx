@@ -102,7 +102,7 @@ export function ContextModal() {
           ))}
           <p className="muted small">
             Some models (DeepSeek, for one) move every message sent as system instructions to the very top of the prompt, whatever its
-            position here. That is why the Author's Note and Length go inside your message by default.
+            position here. That is why the Steering and Length go inside your message by default.
           </p>
         </div>
       </div>

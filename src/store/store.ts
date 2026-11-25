@@ -1,15 +1,19 @@
 import { create } from 'zustand';
-import { repo } from '../db/db';
+import { normalizeChat, normalizeWriting, repo } from '../db/db';
 import { buildContext, writingBlocks, type BuildResult, type HistoryItem } from '../context/build';
 import { backstopCut, lengthBlocks } from '../context/length';
+import { CODEX_SCAN, CODEX_SHARE, codexBlocks, globalNotesBlocks, styleBlocks, summaryBlocks, triggeredEntries } from '../context/codex';
+import { calibrate, currentCharsPerToken, setCharsPerToken } from '../context/tokens';
 import { friendlyError, streamChat, type ProviderError, type WireMessage } from '../providers/openai';
 import {
   activeSwipe, DEFAULT_SETTINGS, FEATHERLESS_PRESET,
-  type AppSettings, type Chat, type Message, type ModelEntry, type Preset, type ProviderConfig, type Swipe,
+  type AppSettings, type Chat, type CodexBook, type HelperThread, type Message, type Suggestion, type ModelEntry, type Preset, type ProviderConfig, type Swipe,
 } from '../types';
 import { uid } from '../lib/id';
+import { STARTER_STYLES } from '../features/starters';
 
 type Panel = 'none' | 'chat-settings';
+export type PanelTab = 'setup' | 'codex' | 'helper' | 'filter' | 'suggestions';
 export type SettingsTab = 'providers' | 'models' | 'presets' | 'general' | 'data';
 
 interface State {
@@ -19,6 +23,14 @@ interface State {
   models: ModelEntry[];
   presets: Preset[];
   chats: Chat[];
+  /** All Codex books: stories' own and the Library's shared ones. */
+  codex: CodexBook[];
+  /** Suggestion cards and Helper conversations for the current chat. */
+  suggestions: Suggestion[];
+  helperThreads: HelperThread[];
+  panelTab: PanelTab;
+  /** Background jobs running or queued, shown as a quiet status line. */
+  jobs: { id: string; label: string }[];
   currentChatId?: string;
   messages: Message[];
   streamingId?: string;
@@ -28,6 +40,9 @@ interface State {
   settingsOpen: boolean;
   settingsTab: SettingsTab;
   contextOpen: boolean;
+  libraryOpen: boolean;
+  /** Helper shown in the Helper tab. */
+  helperId?: string;
   lastContext?: BuildResult;
 }
 
@@ -43,12 +58,18 @@ export const useStore = create<State>()(() => ({
   models: [],
   presets: [],
   chats: [],
+  codex: [],
+  suggestions: [],
+  helperThreads: [],
+  panelTab: 'setup',
+  jobs: [],
   messages: [],
   sidebarOpen: false,
   panel: 'none',
   settingsOpen: false,
   settingsTab: 'providers',
   contextOpen: false,
+  libraryOpen: false,
 }));
 
 const get = useStore.getState;
@@ -82,9 +103,12 @@ export function init(force = false) {
 }
 
 async function doInit() {
-  const [settings, providers, models, presets, chats] = await Promise.all([
-    repo.getSettings(), repo.all('providers'), repo.all('models'), repo.all('presets'), repo.all('chats'),
+  const [settings, providers, models, presets, rawChats, codex] = await Promise.all([
+    repo.getSettings(), repo.all('providers'), repo.all('models'), repo.all('presets'), repo.all('chats'), repo.all('codex'),
   ]);
+  // Older data used NovelAI-style field names; convert on load (saved back on the next change).
+  let chats = rawChats.map(normalizeChat);
+  if (settings?.defaultWriting) settings.defaultWriting = normalizeWriting(settings.defaultWriting);
   let provs = providers;
   if (provs.length === 0) {
     const fl: ProviderConfig = { ...FEATHERLESS_PRESET, id: uid(), apiKey: '' };
@@ -92,18 +116,29 @@ async function doInit() {
     provs = [fl];
   }
   const s: AppSettings = { ...DEFAULT_SETTINGS, ...settings };
-  // v0.3: Author's Note goes inline by default. DeepSeek-style templates move every system
+  // v0.3: Steering goes inline by default. DeepSeek-style templates move every system
   // message to the top of the prompt, so a mid-chat system note lands far from the end.
-  let allChats = chats;
+  let allChats: Chat[] = chats;
   if (!s.migrations?.includes('an-inline')) {
-    allChats = chats.map((c) => (c.writing.anRole === 'system' ? { ...c, writing: { ...c.writing, anRole: 'inline' as const } } : c));
+    allChats = chats.map((c) => (c.writing.steeringMode === 'system' ? { ...c, writing: { ...c.writing, steeringMode: 'inline' as const } } : c));
     for (const c of allChats) await repo.put('chats', c);
-    s.defaultWriting = { ...s.defaultWriting, anRole: 'inline' };
+    s.defaultWriting = { ...s.defaultWriting, steeringMode: 'inline' };
     s.migrations = [...(s.migrations ?? []), 'an-inline'];
     await repo.putSettings(s);
   }
   s.activeProviderId ??= provs[0].id;
-  set({ ready: true, settings: s, providers: provs, models, presets, chats: sortChats(allChats), settingsOpen: !provs.some((p) => p.apiKey) });
+  setCharsPerToken(s.charsPerToken);
+  if (!s.styles) s.styles = STARTER_STYLES;
+  // Chat numbers (#1, #2…), oldest first, for chats made before numbers existed.
+  if (allChats.some((c) => !c.num)) {
+    let n = s.nextChatNum ?? 1;
+    for (const c of allChats.filter((c) => c.num).sort((a, b) => a.num! - b.num!)) n = Math.max(n, c.num! + 1);
+    allChats = [...allChats].sort((a, b) => a.createdAt - b.createdAt).map((c) => (c.num ? c : { ...c, num: n++ }));
+    for (const c of allChats) await repo.put('chats', c);
+    s.nextChatNum = n;
+    await repo.putSettings(s);
+  }
+  set({ ready: true, settings: s, providers: provs, models, presets, codex, chats: sortChats(allChats), settingsOpen: !provs.some((p) => p.apiKey) });
   const first = sortChats(allChats)[0];
   if (first) await selectChat(first.id, true);
 }
@@ -157,10 +192,27 @@ export async function newChat(): Promise<Chat> {
     systemPrompt: s.defaultSystemPrompt,
     params: { ...s.defaultParams },
     writing: { ...s.defaultWriting },
+    num: await takeChatNum(),
+    styleIds: (s.styles ?? []).filter((m) => m.defaultOn).map((m) => m.id),
+    autoSummary: s.defaultAutoSummary ?? true,
+    updatesEvery: s.defaultUpdatesEvery ?? DEFAULT_UPDATES_EVERY,
   };
   await repo.put('chats', chat);
-  set({ chats: sortChats([chat, ...get().chats]), currentChatId: chat.id, messages: [], sidebarOpen: false, lastContext: undefined });
+  set({ chats: sortChats([chat, ...get().chats]), currentChatId: chat.id, messages: [], suggestions: [], helperThreads: [], sidebarOpen: false, lastContext: undefined });
   return chat;
+}
+
+export const DEFAULT_UPDATES_EVERY = 1500;
+
+/** Runs after each finished reply (Cliché Filter, suggested updates, auto-summary). */
+export type ReplyHook = (e: { chatId: string; message: Message; newText: string }) => void | Promise<void>;
+export const replyHooks: ReplyHook[] = [];
+
+async function takeChatNum() {
+  const s = get().settings;
+  const n = Math.max(s.nextChatNum ?? 1, ...get().chats.map((c) => (c.num ?? 0) + 1));
+  await saveSettings({ nextChatNum: n + 1 });
+  return n;
 }
 
 export async function selectChat(id: string, reload = false) {
@@ -170,8 +222,8 @@ export async function selectChat(id: string, reload = false) {
     return;
   }
   if (get().streamingId) stop();
-  const messages = await repo.messages(id);
-  set({ currentChatId: id, messages, sidebarOpen: false, error: undefined, lastContext: undefined });
+  const [messages, suggestions, helperThreads] = await Promise.all([repo.messages(id), repo.byChat('suggestions', id), repo.byChat('helperThreads', id)]);
+  set({ currentChatId: id, messages, suggestions, helperThreads, sidebarOpen: false, error: undefined, lastContext: undefined });
 }
 
 export async function updateChat(patch: Partial<Chat>, id = get().currentChatId) {
@@ -185,9 +237,21 @@ export async function updateChat(patch: Partial<Chat>, id = get().currentChatId)
 export async function duplicateChat(id: string) {
   const src = get().chats.find((c) => c.id === id);
   if (!src) return;
-  const chat: Chat = { ...structuredClone(src), id: uid(), title: `${src.title} (copy)`, createdAt: Date.now(), updatedAt: Date.now() };
+  const chat: Chat = { ...structuredClone(src), id: uid(), num: await takeChatNum(), title: `${src.title} (copy)`, createdAt: Date.now(), updatedAt: Date.now() };
+  const own = get().codex.find((b) => b.id === src.codexId);
+  if (own) {
+    const copy: CodexBook = { ...structuredClone(own), id: uid(), chatId: chat.id, createdAt: Date.now(), updatedAt: Date.now() };
+    await repo.put('codex', copy);
+    set({ codex: [...get().codex, copy] });
+    chat.codexId = copy.id;
+  }
+  const idMap = new Map<string, string>();
+  for (const m of await repo.messages(id)) {
+    idMap.set(m.id, uid());
+    await repo.put('messages', { ...structuredClone(m), id: idMap.get(m.id)!, chatId: chat.id });
+  }
+  if (chat.summary) chat.summary = chat.summary.map((p) => ({ ...p, id: uid(), messageIds: p.messageIds.map((x) => idMap.get(x) ?? x) }));
   await repo.put('chats', chat);
-  for (const m of await repo.messages(id)) await repo.put('messages', { ...structuredClone(m), id: uid(), chatId: chat.id });
   set({ chats: sortChats([chat, ...get().chats]) });
   await selectChat(chat.id);
 }
@@ -195,7 +259,7 @@ export async function duplicateChat(id: string) {
 export async function deleteChat(id: string) {
   // Drop it from state first: a reply still streaming checks this and skips its saves.
   const chats = get().chats.filter((c) => c.id !== id);
-  set({ chats });
+  set({ chats, codex: get().codex.filter((b) => b.chatId !== id) });
   if (streamingChatId === id) stop();
   await repo.deleteChat(id);
   if (get().currentChatId === id) {
@@ -236,19 +300,34 @@ function historyItems(msgs: Message[]): HistoryItem[] {
 /** Builds the exact request for the history before `uptoIndex` (exclusive). Used by generation and the context viewer. */
 export function buildFor(chat: Chat, msgs: Message[], opts: { continueLast?: boolean } = {}): BuildResult {
   const s = get();
-  return buildContext({
+  const history = historyItems(msgs);
+  const limit = contextLimitFor(chat, s);
+  const recent = history.slice(-CODEX_SCAN).map((h) => (typeof h.content === 'string' ? h.content : '')).join('\n');
+  const { hits, dropped } = triggeredEntries(codexBooksFor(chat, s), recent, Math.floor(limit * CODEX_SHARE));
+  const ctx = buildContext({
     systemPrompt: chat.systemPrompt,
     blocks: [
+      ...globalNotesBlocks(s.settings.globalNotes, chat.globalNotes),
       ...writingBlocks(chat.writing),
+      ...styleBlocks(s.settings.styles, chat.styleIds),
+      ...codexBlocks(hits),
+      ...summaryBlocks(chat.summary),
       ...lengthBlocks(chat.length),
-      /* Phase 2: lorebook, summary */
     ],
-    history: historyItems(msgs),
-    contextLimit: contextLimitFor(chat, s),
+    history,
+    contextLimit: limit,
     maxTokens: replyReserve(chat, s),
     safetyMargin: s.settings.safetyMargin,
     continueLast: opts.continueLast,
   });
+  if (dropped.length) ctx.codexDropped = dropped.map((d) => d.entry.name);
+  return ctx;
+}
+
+/** The chat's own Codex book plus any shared books attached to it. */
+export function codexBooksFor(chat: Chat, s: State = get()): CodexBook[] {
+  const ids = [chat.codexId, ...(chat.sharedCodexIds ?? [])];
+  return s.codex.filter((b) => ids.includes(b.id));
 }
 
 /**
@@ -420,7 +499,13 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
           return;
         }
       } else if (ev.type === 'reasoning') swipe = { ...swipe, reasoning: (swipe.reasoning ?? '') + ev.text };
-      else swipe = { ...swipe, finishReason: ev.finishReason };
+      else {
+        swipe = { ...swipe, finishReason: ev.finishReason };
+        if (ev.usage?.prompt_tokens) {
+          swipe.usage = { prompt: ev.usage.prompt_tokens, completion: ev.usage.completion_tokens };
+          calibrate(JSON.stringify(ctx.messages).length, ev.usage.prompt_tokens);
+        }
+      }
       paint();
     }
   };
@@ -451,6 +536,8 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
     set({ streamingId: undefined });
     await save();
     await updateChat({}, chat.id);
+    if (Math.abs((get().settings.charsPerToken ?? 0) - currentCharsPerToken()) > 0.02) await saveSettings({ charsPerToken: currentCharsPerToken() });
+    if (!swipe.error && swipe.content && chatExists()) for (const h of replyHooks) void Promise.resolve(h({ chatId: chat.id, message: target, newText: swipe.content.slice(startOffset) })).catch((e) => console.warn('after-reply hook failed', e));
   }
 }
 
@@ -507,6 +594,9 @@ export async function editMessage(id: string, content: string) {
   const m = get().messages.find((x) => x.id === id);
   if (!m) return;
   await putMessage({ ...m, swipes: m.swipes.map((s, i) => (i === m.activeSwipe ? { ...s, content, error: undefined } : s)) });
+  // A summary part covering this message is now out of date.
+  const chat = currentChat();
+  if (chat?.summary?.some((p) => p.messageIds.includes(id))) await updateChat({ summary: chat.summary.map((p) => (p.messageIds.includes(id) ? { ...p, stale: true } : p)) });
 }
 
 export async function deleteMessage(id: string) {
@@ -531,8 +621,13 @@ export async function insertMessage(role: Message['role'], content: string) {
 export const ui = {
   toggleSidebar: (open?: boolean) => set({ sidebarOpen: open ?? !get().sidebarOpen }),
   setPanel: (panel: Panel) => set({ panel: get().panel === panel ? 'none' : panel }),
+  /** Opens the Story panel on a tab. */
+  openPanel: (tab: PanelTab) => set({ panel: 'chat-settings', panelTab: tab }),
+  setPanelTab: (tab: PanelTab) => set({ panelTab: tab }),
+  openHelper: (helperId: string) => set({ panel: 'chat-settings', panelTab: 'helper', helperId }),
   openSettings: (open: boolean, tab: SettingsTab = 'providers') => set({ settingsOpen: open, settingsTab: tab }),
   setSettingsTab: (tab: SettingsTab) => set({ settingsTab: tab }),
   openContext: (open: boolean) => set({ contextOpen: open }),
+  openLibrary: (open: boolean) => set({ libraryOpen: open, sidebarOpen: false }),
   clearError: () => set({ error: undefined }),
 };
