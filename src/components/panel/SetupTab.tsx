@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { estimateTokens } from '../../context/tokens';
 import { uid } from '../../lib/id';
 import { currentChat, DEFAULT_UPDATES_EVERY, saveSettings, updateChat, upsertPreset, useStore } from '../../store/store';
-import type { GenParams, WritingSettings } from '../../types';
+import { STORY_PROMPT, type GenParams, type WritingSettings } from '../../types';
 import { SummarySection } from './SummarySection';
 import { TagsSection } from './TagsSection';
 import { ui } from '../../store/store';
@@ -46,6 +46,7 @@ function NumField({ label, value, onChange, step = 0.01, min, max, hint, placeho
 export function SetupTab() {
   const chat = useStore((s) => currentChat(s));
   const presets = useStore((s) => s.presets);
+  const defaultPrompt = useStore((s) => s.settings.defaultSystemPrompt);
   const globalNotes = useStore((s) => s.settings.globalNotes);
   const [saved, setSaved] = useState(false);
   if (!chat) return null;
@@ -72,13 +73,23 @@ export function SetupTab() {
         <summary><b>System prompt</b> <span className="muted small">the AI's role and rules</span></summary>
         <div className="row">
           <select
-            value={chat.presetId ?? ''}
+            value={
+              presets.some((p) => p.id === chat.presetId) ? chat.presetId
+                : chat.systemPrompt === defaultPrompt ? 'default'
+                  : chat.systemPrompt === STORY_PROMPT ? 'builtin' : ''
+            }
             onChange={(e) => {
-              const p = presets.find((x) => x.id === e.target.value);
-              updateChat(p ? { presetId: p.id, systemPrompt: p.systemPrompt } : { presetId: undefined });
+              const v = e.target.value;
+              const p = presets.find((x) => x.id === v);
+              if (p) updateChat({ presetId: p.id, systemPrompt: p.systemPrompt });
+              else if (v === 'default') updateChat({ presetId: undefined, systemPrompt: defaultPrompt });
+              else if (v === 'builtin') updateChat({ presetId: undefined, systemPrompt: STORY_PROMPT });
+              else updateChat({ presetId: undefined });
             }}
           >
             <option value="">Custom</option>
+            <option value="default" title="The one set in Settings for new stories">Default</option>
+            {defaultPrompt !== STORY_PROMPT && <option value="builtin" title="The app's original story prompt">Original</option>}
             {presets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <button className="ghost small" onClick={() => {
