@@ -40,7 +40,7 @@ http.createServer(async (req, res) => {
     const w = q.match(/\b[A-Z][a-z]+\b/)?.[0];
     return reply(JSON.stringify({ issues: w ? [{ quote: w, problem: 'Name differs from the notes.', fix: w.toUpperCase() }] : [] }));
   }
-  if (sys.includes('revising a passage')) return reply('A cleaner passage.');
+  if (sys.includes('revising one passage')) return reply('A cleaner passage.');
   if (sys.includes('revising one message')) return reply('The whole message, rewritten as asked.');
   if (j.continue_final_message) {
     res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream' });

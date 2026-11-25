@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { parseTags } from '../../context/codex';
 import { currentChat, updateChat, useStore } from '../../store/store';
 
 const IDEAS: [string, string[]][] = [
@@ -17,7 +18,7 @@ export function TagsSection() {
   const tags = chat.tags ?? [];
   const set = (next: string[]) => updateChat({ tags: [...new Set(next.map((t) => t.trim()).filter(Boolean))] });
   const add = () => {
-    if (text.trim()) set([...tags, ...text.split(/[;,]/)]);
+    if (text.trim()) set([...tags, ...parseTags(text)]);
     setText('');
   };
   const has = (t: string) => tags.some((x) => x.toLowerCase() === t);
@@ -35,7 +36,7 @@ export function TagsSection() {
             if (e.key === 'Enter' || e.key === ',') {
               e.preventDefault();
               add();
-            } else if (e.key === 'Backspace' && !text && tags.length) set(tags.slice(0, -1));
+            }
           }}
         />
       </div>

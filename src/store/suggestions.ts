@@ -4,6 +4,7 @@
 import { repo } from '../db/db';
 import { uid } from '../lib/id';
 import type { Chat, CodexEntry, Message, Suggestion, SummaryPart } from '../types';
+import { parseTags } from '../context/codex';
 import { ownBook, putBook } from './codexStore';
 import { saveSettings, updateChat, useStore } from './store';
 
@@ -51,7 +52,7 @@ export async function accept(id: string, edited?: string) {
     case 'tags':
       undo = chat.tags;
       // The card's text is editable: "a; b; c".
-      await updateChat({ tags: after.split(/[;\n]/).map((t) => t.trim()).filter(Boolean) }, chat.id);
+      await updateChat({ tags: parseTags(after) }, chat.id);
       break;
     case 'title':
       undo = chat.title;

@@ -24,6 +24,12 @@ export function Composer() {
   }, [text]);
 
   useEffect(() => ta.current?.focus(), [chatId]);
+  // Attachments picked in one story must not go out with a message in another.
+  const [attsChat, setAttsChat] = useState(chatId);
+  if (attsChat !== chatId) {
+    setAttsChat(chatId);
+    setAtts([]);
+  }
 
   const submit = () => {
     if (streaming || waiting) return;
@@ -98,7 +104,7 @@ export function Composer() {
           const imgs = [...e.clipboardData.files].filter((f) => f.type.startsWith('image/'));
           if (!imgs.length) return;
           e.preventDefault();
-          for (const f of imgs) void readAttachment(f).then((a) => setAtts((x) => [...x, a]));
+          for (const f of imgs) readAttachment(f).then((a) => setAtts((x) => [...x, a]), (err) => useStore.setState({ error: (err as Error).message }));
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey && enterToSend && !coarse && !e.nativeEvent.isComposing) {

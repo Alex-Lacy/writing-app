@@ -209,6 +209,7 @@ function Models() {
         <input placeholder="…or type a model id exactly" value={manual} onChange={(e) => setManual(e.target.value)} />
         <button disabled={!manual.trim()} onClick={() => { add(manual.trim()); setManual(''); }}>Add</button>
       </div>
+      <JobModelsSection />
     </div>
   );
 }
@@ -272,7 +273,6 @@ function General() {
       <p className="msg-body" style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 12px' }}>
         Rain hammered the tin roofs as Mara stepped onto the pier. “You’re the detective,” he said.
       </p>
-      <JobModelsSection />
     </div>
   );
 }
@@ -287,8 +287,9 @@ function JobModelsSection() {
     <details>
       <summary>Advanced: models for side jobs</summary>
       <p className="muted small">
-        On Featherless the defaults are DeepSeek V4 Pro for the Helper and Proofread, DeepSeek V4.1 Flash for
-        updates, summaries and the Cliché Filter, and your story model for rewrites. Elsewhere, everything uses the story model.
+        Side jobs are the Helper, Proofread, suggested updates, summaries and Cliché fixes. On Featherless they use
+        a strong model for the Helper and Proofread and a fast one for the rest; with other providers they use your
+        story model. Rewrites always use the story model unless you pick one here.
       </p>
       <div className="grid2">
         {(Object.keys(JOB_LABEL) as Job[]).map((job) => (

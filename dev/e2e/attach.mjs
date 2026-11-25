@@ -1,5 +1,5 @@
 import { chromium } from 'playwright-core';
-const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const b = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox'] });
 const p = await b.newPage({ viewport: { width: 1280, height: 860 } });
 const errs = []; let body;
 p.on('pageerror', (e) => errs.push(e.message));

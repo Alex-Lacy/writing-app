@@ -89,12 +89,12 @@ export interface BuildResult {
   codexDropped?: string[];
 }
 
-const textOf = (c: WireMessage['content']) =>
+export const textOf = (c: WireMessage['content']) =>
   typeof c === 'string' ? c : c.map((p) => (p.type === 'text' ? p.text : '[image]')).join('\n');
 
 // Images are billed differently per provider; use a flat rough estimate.
 const tokensOf = (c: WireMessage['content']) =>
-  estimateTokens(textOf(c)) + (typeof c === 'string' ? 0 : c.filter((p) => p.type === 'image_url').length * 800);
+  estimateTokens(textOf(c)) + (typeof c === 'string' ? 0 : c.filter((p) => p.type === 'image_url').length * 1500);
 
 const SOURCE_LABEL: Record<Source, string> = {
   system: 'System prompt',

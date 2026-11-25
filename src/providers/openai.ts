@@ -103,6 +103,8 @@ export function friendlyError(e: unknown, providerName = 'the provider'): string
     return `Couldn't reach ${providerName}. Most often this is a temporary rate limit (wait a minute and try again); otherwise check your internet connection and the base URL.`;
   if (/concurrency/i.test(msg)) return `${providerName} is still busy with another request: your plan allows only so many at once, and large models use the whole allowance. Wait for the other reply (maybe in another tab or app) to finish, then try again.`;
   if ((e as ProviderError)?.status === 429) return `${providerName} is rate-limiting requests. Wait a minute and try again.`;
+  if (/image|vision|multimodal|image_url/i.test(msg) && (e as ProviderError)?.status !== undefined && (e as ProviderError).status! < 500)
+    return `This model can't take images (${msg.slice(0, 120)}). Pick a model marked Vision, or delete the image from your message.`;
   if ((e as ProviderError)?.status === 401) return `${providerName} rejected the API key (401). Check the key in Settings → Providers.`;
   return msg;
 }

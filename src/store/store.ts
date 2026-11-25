@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { normalizeChat, normalizeWriting, repo } from '../db/db';
-import { buildContext, writingBlocks, type BuildResult, type HistoryItem } from '../context/build';
+import { buildContext, textOf, writingBlocks, type BuildResult, type HistoryItem } from '../context/build';
 import { backstopCut, lengthBlocks } from '../context/length';
 import { CODEX_SCAN, CODEX_SHARE, codexBlocks, globalNotesBlocks, styleBlocks, tagsBlocks, summaryBlocks, triggeredEntries } from '../context/codex';
 import { calibrate, currentCharsPerToken, setCharsPerToken } from '../context/tokens';
@@ -304,9 +304,12 @@ async function appendMessage(role: Message['role'], content: string, attachments
 }
 
 function historyItems(msgs: Message[], vision: boolean): HistoryItem[] {
+  // Images go to the model only from the newest message that has any (each one costs ~1-3K tokens
+  // on every request); older ones become a short note.
+  const lastImg = msgs.findLastIndex((m) => m.attachments?.some((a) => a.kind === 'image'));
   return msgs
     .filter((m) => !m.condensed)
-    .map((m) => ({ id: m.id, role: m.role, content: withAttachments(activeSwipe(m).content, m.attachments, vision) }))
+    .map((m) => ({ id: m.id, role: m.role, content: withAttachments(activeSwipe(m).content, m.attachments, vision && msgs.indexOf(m) === lastImg) }))
     .filter((h) => h.content !== '');
 }
 
@@ -315,7 +318,7 @@ export function withAttachments(text: string, atts: Attachment[] | undefined, vi
   if (!atts?.length) return text;
   const files = atts.filter((a) => a.kind === 'file' && a.text).map((a) => `[Attached file: ${a.name}]\n${a.text}\n[End of ${a.name}]`);
   const images = atts.filter((a) => a.kind === 'image' && a.dataUrl);
-  const notes = vision ? [] : images.map((a) => `[Image attached: ${a.name}, not shown because this model can't see images]`);
+  const notes = vision ? [] : images.map((a) => `[Image attached earlier: ${a.name}, not sent with this request]`);
   const body = [...files, ...notes, text].filter(Boolean).join('\n\n');
   if (!vision || !images.length) return body;
   return [...(body ? [{ type: 'text' as const, text: body }] : []), ...images.map((a) => ({ type: 'image_url' as const, image_url: { url: a.dataUrl! } }))];
@@ -326,7 +329,7 @@ export function buildFor(chat: Chat, msgs: Message[], opts: { continueLast?: boo
   const s = get();
   const history = historyItems(msgs, !!modelFor(chat, s)?.vision);
   const limit = contextLimitFor(chat, s);
-  const recent = history.slice(-CODEX_SCAN).map((h) => (typeof h.content === 'string' ? h.content : '')).join('\n');
+  const recent = history.slice(-CODEX_SCAN).map((h) => textOf(h.content)).join('\n');
   const { hits, dropped } = triggeredEntries(codexBooksFor(chat, s), recent, Math.floor(limit * CODEX_SHARE));
   const ctx = buildContext({
     systemPrompt: chat.systemPrompt,
@@ -469,6 +472,7 @@ export async function generate(targetId?: string, opts: { continueId?: string; f
   if (contByAsking) {
     const last = ctx.messages.at(-1);
     if (last?.role === 'user' && typeof last.content === 'string') last.content += '\n\n' + CONTINUE_ASK;
+    else if (last?.role === 'user' && Array.isArray(last.content)) last.content = [...last.content, { type: 'text' as const, text: CONTINUE_ASK }];
     else ctx.messages.push({ role: 'user', content: CONTINUE_ASK });
     const la = ctx.annotated.at(-1);
     const part = { source: 'other' as const, label: 'Continue request', text: CONTINUE_ASK, tokens: Math.ceil(CONTINUE_ASK.length / 3.3) };

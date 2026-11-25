@@ -83,6 +83,9 @@ export function summaryBlocks(parts: SummaryPart[] | undefined): ContextBlock[] 
   return text ? [{ id: 'summary', label: 'Story so far', text: `[Story so far:\n${text}]`, placement: { kind: 'top', order: 30 }, source: 'summary' }] : [];
 }
 
+/** Splits typed or edited tags ("noir; slow burn, explicit") into a clean list. */
+export const parseTags = (text: string): string[] => [...new Set(text.split(/[;,\n]/).map((t) => t.trim()).filter(Boolean))];
+
 /** Story tags as one compact line, after Background and Style modules. */
 export function tagsBlocks(tags: string[] | undefined): ContextBlock[] {
   const t = (tags ?? []).map((x) => x.trim()).filter(Boolean);

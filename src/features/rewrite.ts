@@ -72,11 +72,13 @@ export async function rewritePassage(o: { chatId: string; messageId: string; fro
     maxTokens: Math.max(400, Math.round(countWords(a.passage) * 2.5)),
     temperature: 0.7,
     messages: [
-      { role: 'system', content: `You are revising a passage of an ongoing piece of fiction. Rewrite ONLY the marked passage, following the instruction. Keep the same voice, tense, point of view, facts and formatting as the surrounding story, and make it flow into the text after it. Output only the new passage: no quotes around it, no comments, no notes.${a.notes ? `\n\n# Story notes\n${a.notes}` : ''}` },
-      { role: 'user', content: `# Story before the passage\n${a.before || '(start of story)'}\n\n# PASSAGE TO REWRITE\n${a.passage}\n\n# Story after the passage\n${a.after || '(end of story so far)'}\n\n# Instruction\n${o.feedback}` },
+      // The passage goes last, right before the instruction: with it in the middle (tested live),
+      // small story models carried on writing the story that follows instead of revising it.
+      { role: 'system', content: `You are revising one passage of an ongoing piece of fiction. You get the story before it, the story after it, the passage itself and an instruction. Rewrite ONLY the passage, following the instruction. The new version must cover the same moment as the passage: it starts where the passage starts and ends where it ends, so the text after it still follows on. Don't repeat or add events from the text before or after it. Keep the voice, tense, point of view, facts and formatting. Output only the new passage: no quotes around it, no comments, no notes.${a.notes ? `\n\n# Story notes\n${a.notes}` : ''}` },
+      { role: 'user', content: `# Story before the passage\n${a.before || '(start of story)'}\n\n# Story after the passage\n${a.after.trim() || '(end of story so far)'}\n\n# THE PASSAGE TO REWRITE\n<passage>\n${a.passage.trim()}\n</passage>\n\n# Instruction\n${o.feedback}\n\nWrite the new version of the passage now.` },
     ],
   });
-  const after = res.text.replace(/^["“]|["”]$/g, '').trim();
+  const after = res.text.replace(/^\s*<\/?passage>|<\/?passage>\s*$/g, '').trim();
   if (!after || after === a.passage.trim()) return;
   const lead = a.passage.match(/^\s*/)![0];
   const trail = a.passage.match(/\s*$/)![0];
@@ -113,8 +115,8 @@ export async function rewriteMessage(chatId: string, messageId: string, feedback
       temperature: 0.8,
       onText: (t) => void write((m) => setText(m, t), false),
       messages: [
-        { role: 'system', content: `${chat.systemPrompt}\n\nYou are revising one message of an ongoing story. Rewrite it following the instruction, keeping what the instruction doesn't ask to change. Output only the new message.${a.notes ? `\n\n# Story notes\n${a.notes}` : ''}` },
-        { role: 'user', content: `# Story before this message\n${a.before || '(start of story)'}\n\n# MESSAGE TO REWRITE\n${content}\n\n# Story after it\n${a.after || '(nothing yet)'}\n\n# Instruction\n${feedback}` },
+        { role: 'system', content: `${chat.systemPrompt}\n\nYou are revising one message of an ongoing story. Rewrite it following the instruction, keeping what the instruction doesn't ask to change. Cover the same events: don't carry on into what happens next. Output only the new message.${a.notes ? `\n\n# Story notes\n${a.notes}` : ''}` },
+        { role: 'user', content: `# Story before this message\n${a.before || '(start of story)'}\n\n# Story after it\n${a.after.trim() || '(nothing yet)'}\n\n# THE MESSAGE TO REWRITE\n<message>\n${content}\n</message>\n\n# Instruction\n${feedback}\n\nWrite the new version of the message now.` },
       ],
     });
     await write((m) => setText(m, res.text), true);

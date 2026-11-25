@@ -37,6 +37,12 @@ export function ChatView() {
           <div className="empty">
             <h2>{chat ? 'Start writing' : 'Writing Studio'}</h2>
             <p>Pick a model up top, then just start typing. For a guided setup, use <b>+ New story</b> or the Helper in the Story panel (▤).</p>
+            {!chat && location.protocol === 'https:' && !matchMedia('(display-mode: standalone)').matches && (
+              <p className="muted small">
+                Tip: install it as an app so it opens full-screen and works offline. On iPhone or iPad: Share, then
+                Add to Home Screen. On Android or desktop: the install option in your browser's menu.
+              </p>
+            )}
           </div>
         )}
         {messages.map((m, i) => (

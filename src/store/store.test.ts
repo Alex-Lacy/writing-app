@@ -142,6 +142,6 @@ describe('attachments', () => {
     expect(c).toEqual([{ type: 'text', text: '[Attached file: notes.md]\nRell is the captain.\n[End of notes.md]\n\nLook' }, { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,AAAA' } }]);
   });
   it('tells other models an image was left out', () => {
-    expect(withAttachments('', atts, false)).toContain("[Image attached: map.jpg, not shown because this model can't see images]");
+    expect(withAttachments('', atts, false)).toContain('[Image attached earlier: map.jpg, not sent with this request]');
   });
 });

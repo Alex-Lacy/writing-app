@@ -39,10 +39,8 @@ export function jobModel(job: Job, chat?: Chat): JobModel | undefined {
   const fromKey = (key?: string): JobModel | undefined => {
     if (!key) return undefined;
     const m = s.models.find((x) => x.key === key);
-    if (m) return fromEntry(m, providerFor(m, s));
-    const [pid, ...rest] = key.split('::');
-    const p = s.providers.find((x) => x.id === pid);
-    return p ? withCaps(p, rest.join('::'), undefined) : undefined;
+    // A model removed from "Your models" falls back to the default instead of failing.
+    return m ? fromEntry(m, providerFor(m, s)) : undefined;
   };
   const override = fromKey(s.settings.jobModels?.[job]);
   if (override) return override;
