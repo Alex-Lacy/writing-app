@@ -15,8 +15,8 @@ export function OutlineSection({ chat }: { chat: Chat }) {
         <label className="wt-on" title="Send the Outline (switch off to keep it but leave it out)"><input type="checkbox" checked={!ol.off} onChange={(e) => set({ off: !e.target.checked || undefined })} /> <b>Outline</b></label>
         <em className="muted small">~{tokens} tokens</em>
       </div>
-      <p className="muted small">Long-term plan, one beat (about a scene) per line. Start the current beat with "&gt;". Only that beat is sent as the scene goal. The next ones are sent for awareness only, with a note not to steer toward or foreshadow them, so the story doesn't contradict them.</p>
-      <textarea rows={6} value={ol.text} onChange={(e) => set({ text: e.target.value })} placeholder={'Mara arrives in Harrowgate and meets Rell.\n> Rell offers her a job she can\'t refuse.\nThe job goes wrong at the docks.\nMara learns Rell set her up.'} />
+      <p className="muted small">Long-term plan: one beat per scene, a sentence or two on what happens and what it changes. Start the current beat with "&gt;"; lines starting with "#" are chapter headings. Only that beat is sent as the scene goal. The next ones are sent for awareness only, with a note not to steer toward or foreshadow them, so the story doesn't contradict them.</p>
+      <textarea rows={6} value={ol.text} onChange={(e) => set({ text: e.target.value })} placeholder={'# Chapter 1: Harrowgate\nMara arrives and meets Rell, who knows more than he says.\n> Rell offers her a job she can\'t refuse.\n# Chapter 2: The docks\nThe job goes wrong; Mara is seen.\nMara learns Rell set her up.'} />
       {beats.length > 0 && (
         <div className="row outline-nav">
           <button className="small" disabled={current <= 0} onClick={() => set({ text: moveMarker(ol.text, -1) })} title="Back one beat">◀</button>

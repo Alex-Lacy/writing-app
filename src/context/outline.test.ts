@@ -7,13 +7,14 @@ const chat = (o: Chat['outline']) => ({ outline: o, writing: { steeringDepth: 1,
 
 describe('outline', () => {
   it('reads beats and the marker, ignoring list numbering', () => {
-    expect(parseOutline(text)).toEqual({ beats: ['Mara arrives.', 'Rell offers a job.', 'The job goes wrong.', 'The betrayal.'], current: 1 });
+    expect(parseOutline(text)).toMatchObject({ beats: ['Mara arrives.', 'Rell offers a job.', 'The job goes wrong.', 'The betrayal.'], current: 1 });
     expect(parseOutline('A\nB').current).toBe(0);
   });
   it('moves the marker and marks the end', () => {
     const t = moveMarker(text, 1);
     expect(parseOutline(t).current).toBe(2);
-    expect(t).toContain('> The job goes wrong.');
+    expect(t).toContain('> - The job goes wrong.');
+    expect(t).toContain('1. Mara arrives.');
     const end = moveMarker(moveMarker(t, 1), 1);
     expect(end.endsWith('> (end)')).toBe(true);
     expect(parseOutline(end)).toMatchObject({ current: 4 });
@@ -29,5 +30,14 @@ describe('outline', () => {
     expect(outlineBlocks(chat({ text, ahead: 0 })).map((x) => x.id)).toEqual(['outline-now']);
     expect(outlineBlocks(chat({ text, off: true }))).toEqual([]);
     expect(outlineBlocks(chat({ text: moveMarker(moveMarker(moveMarker(text, 1), 1), 1) }))).toEqual([]);
+  });
+  it('chapter headings orient the model but are not beats, and survive moving the marker', () => {
+    const t = '# Chapter 1: Arrival\nMara arrives.\n> Rell offers a job.\n\n# Chapter 2: The docks\nThe job goes wrong.';
+    expect(parseOutline(t)).toMatchObject({ beats: ['Mara arrives.', 'Rell offers a job.', 'The job goes wrong.'], current: 1, chapters: ['Chapter 1: Arrival', 'Chapter 1: Arrival', 'Chapter 2: The docks'] });
+    const b = outlineBlocks(chat({ text: t }));
+    expect(b[1].text).toContain('Current chapter: Chapter 1: Arrival. Current scene goal: Rell offers a job.');
+    expect(b[0].text).toContain('(Chapter 2: The docks) The job goes wrong.');
+    const moved = moveMarker(t, 1);
+    expect(moved).toBe('# Chapter 1: Arrival\nMara arrives.\nRell offers a job.\n\n# Chapter 2: The docks\n> The job goes wrong.');
   });
 });
