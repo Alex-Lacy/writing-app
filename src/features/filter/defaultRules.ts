@@ -407,4 +407,20 @@ export const DEFAULT_RULES = `
 
 #! [face-it-together] Facing it together, e.g. "whatever came, they would face it together"
 /\\b(?:face|faced|facing)\\s+(?:it|this|them|anything|whatever\\s+\\w+(?:\\s+\\w+)?)\\s+together\\b/i
+
+#! [heart-reacts] A heart that quickens, leaps or sinks, e.g. "her heart quickened", "his heart leapt"
+/\\b(?:%POSS%|\\w+['’]s)\\s+heart\\s+(?:quickened|leapt|leaped|lurched|sank|soared|raced|stuttered|swelled|clenched|twisted)\\b/i
+
+#! [neck-hairs] Hairs rising on the neck, e.g. "the hairs on the back of her neck stood up"
+/\\b(?:hairs?|skin)\\s+(?:on|at)\\s+the\\s+(?:back|nape)\\s+of\\s+%POSS%\\s+neck\\s+(?:stood|rose|prickled|bristled|lifted)\\b/i
+
+#! [jaw-clenched] Jaws clenching and tightening, e.g. "his jaw clenched", "she clenched her jaw"
+/\\b(?:%POSS%|\\w+['’]s)\\s+jaw\\s+(?:clenched|tightened|tensed|set|hardened|ticked|flexed)\\b/i
+/\\b(?:clenched|clenching|clenches|tightened|set)\\s+%POSS%\\s+jaw\\b/i
+
+#! [voice-held-note] A voice holding a note of something, e.g. "his voice held a note of desperate hope"
+/\\b%POSS%\\s+voice\\s+(?:held|carried|had|bore)\\s+(?:a|an)\\s+(?:\\w+\\s+)?(?:note|hint|edge|trace|tinge|thread)\\s+of\\b/i
+
+#! [quick-shallow-breath] Breath coming quick and shallow, e.g. "breath coming quick and shallow"
+/\\bbreath(?:ing)?\\s+(?:coming|came|comes)\\s+(?:in\\s+)?(?:quick|short|shallow|ragged|fast|harsh)\\b/i
 `;

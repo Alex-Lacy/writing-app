@@ -64,6 +64,7 @@ http.createServer(async (req, res) => {
     res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }] })}\n\n`);
     return res.end('data: [DONE]\n\n');
   }
+  if (process.env.STORY_FILE && String(last.content).includes('LIVESTORY')) return reply((await import('node:fs')).readFileSync(process.env.STORY_FILE, 'utf8'));
   const text = `You said: "${String(typeof last.content === 'string' ? last.content : '').slice(0, 80)}". The prompt had ${j.messages.length} messages. **Bold** and a second paragraph.\n\n${String(last.content).includes('SLOP') ? 'A shiver ran down her spine. ' : ''}The end.`;
   res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream' });
   const chunks = j.model.includes('reasoner') ? ['<thi', 'nk>Let me think about', ' this carefully.</think>\n\n', ...text.match(/.{1,6}/gs)] : text.match(/.{1,6}/gs);

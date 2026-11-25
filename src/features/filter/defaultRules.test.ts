@@ -69,7 +69,7 @@ function hits(text: string): string[] {
 describe('default cliché rules', () => {
   it('parses, compiles and has unique ids', () => {
     expect(rules.length).toBeGreaterThanOrEqual(60)
-    expect(rules.length).toBeLessThanOrEqual(100)
+    expect(rules.length).toBeLessThanOrEqual(120)
     const ids = rules.map((r) => r.id)
     expect(new Set(ids).size).toBe(ids.length)
     for (const r of rules) expect(r.patterns.length, r.id).toBeGreaterThan(0)

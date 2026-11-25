@@ -73,8 +73,10 @@ export function locate(source: string, selected: string, near = 0): { from: numb
   if (!t) return;
   // Every place the text could be (exactly, or with Markdown marks between words); the one
   // closest to where the selection sits on screen wins, so a repeated line picks the right copy.
-  const words = t.split(/\s+/).filter(Boolean).map(esc);
-  const re = new RegExp(words.join('[\\s*_~`>#\\-"“”]{1,12}'), 'g');
+  // Any Markdown marks (*, _, ~, `) may sit between rendered characters; any whitespace run (or a
+  // line-start mark like > or #) stands for any whitespace run.
+  const pat = t.split(/\s+/).filter(Boolean).map((w) => [...w].map(esc).join('[*_~`]*')).join('[*_~`]*\\s+[>#\\-*_~`\\s]*');
+  const re = new RegExp(pat, 'g');
   let r: { from: number; to: number } | undefined;
   for (const m of source.matchAll(re)) if (!r || Math.abs(m.index - near) < Math.abs(r.from - near)) r = { from: m.index, to: m.index + m[0].length };
   if (!r) return;

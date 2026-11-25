@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { locate } from '../../components/messageHooks';
 import { spotsFor } from './filter';
-import { compileRules, scan } from './rules';
+import { compileRules, scan, sentenceAround } from './rules';
 
 describe('Cliché Filter helpers', () => {
   it('groups hits in one sentence into one spot', () => {
@@ -27,5 +27,32 @@ describe('locate', () => {
     const src = 'She nodded. He left. She nodded.';
     expect(locate(src, 'She nodded.', 25)).toEqual({ from: 21, to: 32 });
     expect(locate(src, 'She nodded.', 0)).toEqual({ from: 0, to: 11 });
+  });
+});
+
+describe('rules found missing in a live story', () => {
+  it('catches them', () => {
+    const t = "Her heart quickened. The hairs on the back of her neck stood up. Mara's jaw clenched. His voice held a note of desperate hope, breath coming quick and shallow.";
+    const ids = scan(t, compileRules().rules).map((h) => h.ruleId);
+    expect(ids).toEqual(['heart-reacts', 'neck-hairs', 'jaw-clenched', 'voice-held-note', 'quick-shallow-breath']);
+  });
+});
+
+describe('locate with emphasis next to punctuation', () => {
+  it('finds it', () => {
+    const src = 'with a name. *Orrin Kessler*. And a date.';
+    expect(locate(src, 'name. Orrin Kessler. And')).toEqual({ from: 7, to: 33 });
+  });
+});
+
+describe('sentenceAround quotes', () => {
+  it('keeps the opening quote of dialogue and drops the closing quote of the sentence before', () => {
+    const t = 'She left. "It could be nothing," Tobias said, his voice held a note of hope. "Go." He ran down her spine.';
+    const a = t.indexOf('voice');
+    const r = sentenceAround(t, a, a + 5);
+    expect(t.slice(r.from, r.to)).toBe('"It could be nothing," Tobias said, his voice held a note of hope.');
+    const b = t.indexOf('ran');
+    const r2 = sentenceAround(t, b, b + 3);
+    expect(t.slice(r2.from, r2.to)).toBe('He ran down her spine.');
   });
 });

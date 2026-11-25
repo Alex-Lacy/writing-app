@@ -102,8 +102,13 @@ export function scan(text: string, rules: Rule[], disabled: string[] = []): Hit[
 export function sentenceAround(text: string, from: number, to: number): { from: number; to: number } {
   let a = from;
   while (a > 0 && !/[.!?…\n]/.test(text[a - 1]) ) a--;
-  // Keep closing quotes with the previous sentence.
-  while (a < from && /[\s"”’')\]]/.test(text[a])) a++;
+  // Skip spaces, and a closing quote or bracket that ends the previous sentence ("Go." He ran),
+  // but keep an opening quote with this sentence ("It could be nothing," he said).
+  for (;;) {
+    if (a < from && /\s/.test(text[a])) a++;
+    else if (a < from && a > 0 && /["”’')\]]/.test(text[a]) && /[.!?…"”’')\]]/.test(text[a - 1]) && /\s/.test(text[a + 1] ?? ' ')) a++;
+    else break;
+  }
   let b = to;
   while (b < text.length && !/[.!?…\n]/.test(text[b])) b++;
   while (b < text.length && /[.!?…"”’')\]*]/.test(text[b])) b++;
