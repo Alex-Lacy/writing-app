@@ -270,7 +270,7 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .helper-msg.user { background: var(--bg3); align-self: flex-end; max-width: 90%; }
 .helper-msg.user p { margin: 0; white-space: pre-wrap; }
 .helper-msg.assistant { border: 1px solid var(--line); }
-.helper-input { display: flex; gap: 6px; align-items: flex-end; position: sticky; bottom: 0; background: var(--bg2); padding-top: 6px; }
+.helper-input { display: flex; gap: 6px; align-items: flex-end; position: sticky; bottom: -12px; background: var(--bg2); padding: 6px 0 12px; margin-bottom: -12px; }
 .helper-input textarea { flex: 1; }
 
 .lib-item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
@@ -339,3 +339,5 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .spinner { width: 10px; height: 10px; border: 2px solid var(--muted); border-top-color: transparent; border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+.jump-latest { position: sticky; bottom: 10px; margin: 0 auto; display: block; width: fit-content; z-index: 5; font-size: 12px; padding: 4px 12px; border-radius: 999px; background: var(--bg2); border: 1px solid var(--line); box-shadow: 0 2px 8px rgb(0 0 0 / .25); }
+.helper-input .jump-latest { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); }

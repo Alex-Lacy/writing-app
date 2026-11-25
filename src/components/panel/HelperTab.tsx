@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { askHelper, clearThread, deleteHelperMessage, editHelperMessage, helpersList, retryHelper, stopHelper } from '../../features/helper';
 import { renderMarkdown } from '../../lib/markdown';
 import { currentChat, ui, useStore } from '../../store/store';
 import { SuggestionCard } from './SuggestionCard';
+import { useStickyScroll } from '../useStickyScroll';
 import { accept } from '../../store/suggestions';
 
 /** Talk to a Helper about this story; its proposed changes show as cards right in the conversation. */
@@ -14,7 +15,6 @@ export function HelperTab() {
   const hasStory = useStore((s) => s.messages.length > 0);
   const [text, setText] = useState('');
   const anyLive = useStore((s) => s.helperLive);
-  const end = useRef<HTMLDivElement>(null);
   const helpers = helpersList();
   const fresh = !hasStory && !chat?.writing.background.trim();
   const helper = helpers.find((h) => h.id === chosen) ?? helpers.find((h) => h.id === (fresh ? 'helper-new-story' : 'helper-setup'))!;
@@ -23,7 +23,8 @@ export function HelperTab() {
   const mine = anyLive && chat && anyLive.chatId === chat.id && anyLive.helperId === helper.id ? anyLive : undefined;
   const live = mine && !mine.error ? mine.text : undefined;
   const busy = !!anyLive && !anyLive.error; // one Helper reply at a time
-  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [thread?.messages.length, live]);
+  // Follow the reply only while you're at the bottom, so you can read back or press Accept.
+  const scroll = useStickyScroll<HTMLDivElement>(`${thread?.messages.length}:${live?.length}:${mine?.phase}`);
   if (!chat) return null;
 
   const send = () => {
@@ -36,7 +37,7 @@ export function HelperTab() {
   const count = thread?.messages.length ?? 0;
 
   return (
-    <div className="panel-body helper">
+    <div className="panel-body helper" ref={scroll.ref} onScroll={scroll.onScroll}>
       <div className="row">
         <select value={helper.id} onChange={(e) => ui.openHelper(e.target.value)}>
           {helpers.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
@@ -78,9 +79,9 @@ export function HelperTab() {
             {mine.error} <button className="small ghost" onClick={() => void retryHelper(chat.id, helper.id)}>Try again</button>
           </p>
         )}
-        <div ref={end} />
       </div>
       <div className="helper-input">
+        {scroll.away && <button className="jump-latest" onClick={scroll.jump}>{live !== undefined ? '↓ Follow the reply' : '↓ Latest'}</button>}
         <textarea
           rows={3}
           value={text}

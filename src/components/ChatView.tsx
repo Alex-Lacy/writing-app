@@ -1,6 +1,7 @@
-import { useDeferredValue, useEffect, useMemo, useRef } from 'react';
+import { useDeferredValue, useMemo } from 'react';
 import { previewFor, currentChat, modelFor, useStore } from '../store/store';
 import { MessageItem } from './MessageItem';
+import { useStickyScroll } from './useStickyScroll';
 import { Composer } from './Composer';
 import { SelectionToolbar } from './MessageTools';
 
@@ -11,8 +12,7 @@ export function ChatView() {
   const error = useStore((s) => s.error);
   const helperOpen = useStore((s) => s.panel === 'chat-settings' && s.panelTab === 'helper');
   const hasModel = useStore((s) => !!modelFor(currentChat(s), s));
-  const scroller = useRef<HTMLDivElement>(null);
-  const stick = useRef(true);
+  const scroll = useStickyScroll<HTMLDivElement>(messages);
 
   // Which messages fall outside the context window right now.
   const lazyChat = useDeferredValue(chat);
@@ -21,20 +21,13 @@ export function ChatView() {
     return new Set(previewFor(lazyChat, messages).droppedIds);
   }, [lazyChat, messages, streamingId]);
 
-  useEffect(() => {
-    const el = scroller.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [messages]);
 
   return (
     <div className="chat">
       <div
         className="messages"
-        ref={scroller}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-        }}
+        ref={scroll.ref}
+        onScroll={scroll.onScroll}
       >
         {messages.length === 0 && (
           <div className="empty">
@@ -55,6 +48,7 @@ export function ChatView() {
         {messages.map((m, i) => (
           <MessageItem key={m.id} m={m} isLast={i === messages.length - 1} outOfContext={dropped.has(m.id)} />
         ))}
+        {scroll.away && <button className="jump-latest" onClick={scroll.jump}>{streamingId ? '↓ Follow the reply' : '↓ Latest'}</button>}
       </div>
       {error && (
         <div className="error-bar" onClick={() => useStore.setState({ error: undefined })}>
