@@ -7,7 +7,12 @@ import { repo } from '../db/db';
 import { uid } from '../lib/id';
 import { useStore } from '../store/store';
 import { addSuggestions, reject } from '../store/suggestions';
-import type { HelperDef, HelperThread } from '../types';
+import type { HelperDef, HelperMessage, HelperThread } from '../types';
+import { researchProtocol, runLookup, splitLookups, type LookupResult } from './research';
+
+type Phase = 'queued' | 'sent' | 'busy' | 'thinking' | 'writing' | 'looking';
+/** Rounds of lookups before a research Helper must answer. */
+const MAX_LOOKUP_ROUNDS = 4;
 import { BUILTIN_HELPERS, PROTOCOL } from './starters';
 import { setupText, transcript } from './storyText';
 import { toSuggestions, type Proposal } from './updates';
@@ -15,7 +20,7 @@ import { toSuggestions, type Proposal } from './updates';
 /** Built-in Helpers (or the person's edited copies) followed by their own. */
 export function helpersList(): HelperDef[] {
   const mine = useStore.getState().settings.helpers ?? [];
-  return [...BUILTIN_HELPERS.map((b) => mine.find((m) => m.id === b.id) ?? b), ...mine.filter((m) => !BUILTIN_HELPERS.some((b) => b.id === m.id))];
+  return [...BUILTIN_HELPERS.map((b) => ({ ...b, ...mine.find((m) => m.id === b.id) })), ...mine.filter((m) => !BUILTIN_HELPERS.some((b) => b.id === m.id))];
 }
 
 /** How much recent story a Helper sees, in tokens. */
@@ -86,8 +91,9 @@ export function stopHelper() {
 export async function retryHelper(chatId: string, helperId: string) {
   if (helperBusy()) return;
   const t = await threadFor(chatId, helperId);
-  const last = t.messages.at(-1);
-  if (last?.role === 'assistant') await dropMessages(t, t.messages.length - 1, t.messages.length);
+  // Everything after your last message (its reply and any lookups) goes.
+  const lastUser = t.messages.findLastIndex((m) => m.role === 'user');
+  if (lastUser >= 0 && lastUser < t.messages.length - 1) await dropMessages(t, lastUser + 1, t.messages.length);
   await reply(chatId, helperId);
 }
 
@@ -116,7 +122,7 @@ async function reply(chatId: string, helperId: string) {
   const chat = s.chats.find((c) => c.id === chatId);
   const helper = helpersList().find((h) => h.id === helperId);
   const thread = await threadFor(chatId, helperId);
-  if (!chat || !helper || thread.messages.at(-1)?.role !== 'user') return;
+  if (!chat || !helper || thread.messages.at(-1)?.role === 'assistant' || !thread.messages.length) return;
 
   // Recent story, newest last, within budget.
   const msgs = chatId === s.currentChatId ? s.messages : await repo.messages(chatId);
@@ -133,40 +139,70 @@ async function reply(chatId: string, helperId: string) {
   helperAbort = new AbortController();
   discard = false;
   const startedAt = Date.now();
-  let phase: 'queued' | 'sent' | 'busy' | 'thinking' | 'writing' = 'queued';
+  let phase: Phase = 'queued';
   let thought = 0;
-  const show = (t: string) => setLive({ chatId, helperId, text: t, startedAt, phase, reasoning: thought });
+  let doing = '';
+  const show = (t: string) => setLive({ chatId, helperId, text: t, startedAt, phase, reasoning: thought, doing });
   show('');
+  const system = `${helper.instructions}\n${PROTOCOL}${helper.research ? researchProtocol() : ''}\n\n${context}`;
   let text = '';
   let lastPaint = 0;
   try {
-    const res = await runJob({
-      job: 'helper',
-      chat,
-      label: `${helper.name} is thinking`,
-      maxTokens: 3000,
-      temperature: 0.6,
-      signal: helperAbort.signal,
-      onText: (t) => {
-        text = t;
-        show(t);
-      },
-      onProgress: (p) => {
-        if (p.phase === phase && p.phase !== 'thinking') return;
-        phase = p.phase;
-        thought = p.reasoning;
-        // Thinking streams in tiny pieces; repaint a few times a second at most.
-        if (p.phase !== 'thinking' || Date.now() - lastPaint > 400) {
-          lastPaint = Date.now();
-          show(text);
-        }
-      },
-      messages: [
-        { role: 'system', content: `${helper.instructions}\n${PROTOCOL}\n\n${context}` },
-        ...thread.messages.map((m) => ({ role: m.role === 'user' ? ('user' as const) : ('assistant' as const), content: m.content })),
-      ],
-    });
-    text = res.text;
+    // A research Helper may look things up a few times before it answers.
+    for (let round = 0; ; round++) {
+      const convo = (await threadFor(chatId, helperId)).messages;
+      text = '';
+      phase = 'queued';
+      const res = await runJob({
+        job: 'helper',
+        chat,
+        label: `${helper.name} is thinking`,
+        maxTokens: 3000,
+        temperature: 0.6,
+        signal: helperAbort.signal,
+        onText: (t) => {
+          text = t;
+          show(t);
+        },
+        onProgress: (p) => {
+          if (p.phase === phase && p.phase !== 'thinking') return;
+          phase = p.phase;
+          thought = p.reasoning;
+          doing = '';
+          // Thinking streams in tiny pieces; repaint a few times a second at most.
+          if (p.phase !== 'thinking' || Date.now() - lastPaint > 400) {
+            lastPaint = Date.now();
+            show(text);
+          }
+        },
+        messages: [
+          { role: 'system', content: round >= MAX_LOOKUP_ROUNDS ? `${system}\n\nYou've used all your lookups: answer now with what you found.` : system },
+          ...convo.map((m) => (m.role === 'tool' ? { role: 'user' as const, content: `# Lookup results (from the app, not the person)\n${m.content}` } : { role: m.role === 'user' ? ('user' as const) : ('assistant' as const), content: m.content })),
+        ],
+      });
+      text = res.text;
+      const { say, lookups } = helper.research && round < MAX_LOOKUP_ROUNDS ? splitLookups(text) : { say: text, lookups: [] };
+      if (!lookups.length) break;
+      // Keep what it said, then run the lookups and hand the results back.
+      phase = 'looking';
+      const results: LookupResult[] = [];
+      for (const l of lookups) {
+        doing = l.tool === 'read' ? `Reading “${l.page}”` : l.tool === 'search' ? `Searching for “${l.query}”` : l.tool === 'find_wiki' ? `Finding the ${l.series} wiki` : l.tool === 'web' ? `Searching the web for “${l.query}”` : `Opening ${l.url}`;
+        show('');
+        results.push(await runLookup(l, helperAbort.signal));
+      }
+      const t = await threadFor(chatId, helperId);
+      const extra: HelperMessage[] = [];
+      if (say.trim()) extra.push({ role: 'assistant', content: say.trim(), createdAt: Date.now() });
+      extra.push({
+        role: 'tool',
+        content: results.map((r) => `## ${r.label}\n${r.text}`).join('\n\n'),
+        lookups: results.map((r) => ({ label: r.label, sources: r.sources })),
+        createdAt: Date.now(),
+      });
+      await saveThread({ ...t, messages: [...t.messages, ...extra] });
+      doing = '';
+    }
   } catch (e) {
     if ((e as Error).name !== 'AbortError') {
       setLive({ chatId, helperId, text: '', error: (e as Error).message });
@@ -176,7 +212,7 @@ async function reply(chatId: string, helperId: string) {
   } finally {
     helperAbort = undefined;
   }
-  const { say, changes } = splitReply(text);
+  const { say, changes } = splitReply(helper.research ? splitLookups(text).say : text);
   const fresh = useStore.getState().chats.find((c) => c.id === chatId) ?? chat;
   const cards = await addSuggestions(chatId, toSuggestions(fresh, changes, 'helper'));
   const t = await threadFor(chatId, helperId);

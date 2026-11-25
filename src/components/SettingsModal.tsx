@@ -221,7 +221,39 @@ function Models() {
         <button disabled={!manual.trim()} onClick={() => { add(manual.trim()); setManual(''); }}>Add</button>
       </div>
       <JobModelsSection />
+      <WebSearchSection />
     </div>
+  );
+}
+
+/** Optional general web search for research Helpers. Wikis work without it. */
+function WebSearchSection() {
+  const proxy = useStore((x) => x.settings.searchProxy ?? '');
+  const [status, setStatus] = useState('');
+  const test = async () => {
+    setStatus('Testing…');
+    try {
+      const r = await fetch(`${proxy.replace(/\/$/, '')}/?q=${encodeURIComponent('fan fiction')}`);
+      const j = (await r.json()) as unknown[];
+      setStatus(Array.isArray(j) ? `Works: ${j.length} results.` : 'It answered, but not with search results.');
+    } catch (e) {
+      setStatus(`Couldn't reach it: ${(e as Error).message}`);
+    }
+  };
+  return (
+    <details>
+      <summary>Advanced: web search for the Research Helper</summary>
+      <p className="muted small">
+        The Research Helper already reads Wikipedia and Fandom wikis with no setup. For general web search, a browser
+        app needs a small relay, because search sites don't let web pages call them directly. You can run your own for
+        free on Cloudflare in about five minutes: see <a href="https://github.com/Alex-Lacy/writing-app/blob/main/worker/README.md" target="_blank" rel="noreferrer">the guide</a>. Searches then go from your relay to DuckDuckGo; nothing else is stored anywhere.
+      </p>
+      <div className="row">
+        <input placeholder="https://your-search.your-name.workers.dev" value={proxy} onChange={(e) => void saveSettings({ searchProxy: e.target.value.trim() || undefined })} />
+        <button disabled={!proxy} onClick={() => void test()}>Test</button>
+      </div>
+      {status && <p className="small">{status}</p>}
+    </details>
   );
 }
 

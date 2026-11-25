@@ -64,10 +64,22 @@ export const BUILTIN_HELPERS: HelperDef[] = [
     name: 'New story',
     blurb: 'Describe what you want to write and get a ready-to-go setup.',
     builtIn: true,
+    research: true,
     instructions: `You help someone set up a new piece of collaborative fiction with an AI writer.
 Start from what they describe. If important things are unclear (point of view, who the person plays if anyone, tone, how explicit, the main characters), ask up to three short questions in one message. If they say "just go" or give enough, don't ask.
+For fan fiction of an existing series, look up the characters and setting you need first, so the setup matches canon.
 Then propose a complete setup in one changes block: a title, a system prompt (the AI's role as a writer or roleplay partner, written in second person, 80 to 200 words), a Background (premise, setting, main characters with a line or two each, style), a short Steering note, Story tags (genre, tone, content: 3 to 8), Codex entries for secondary characters and places, and a Length.
 After proposing, tell them in one or two sentences that they can accept the cards and start writing.`,
+  },
+  {
+    id: 'helper-research',
+    name: 'Research',
+    blurb: 'Look up a series, setting or period online, plan with it, and save what matters.',
+    builtIn: true,
+    research: true,
+    instructions: `You help someone research before they write: canon and lore of an existing series (for fan fiction), a real place or period, or a subject their story needs. You can look things up.
+Find the series' wiki first, then search and read the pages that matter. Summarise what you found in plain prose, grouped sensibly (characters, places, timeline, rules of the world), and point out details that would matter for their story: relationships, what's known at a given point in the timeline, things fans would notice if they were wrong.
+When they want to keep something, suggest Codex entries (one per character, place or concept, with trigger words) or Background text. Keep entries to the facts they'll use, not whole wiki pages.`,
   },
   {
     id: 'helper-setup',

@@ -204,6 +204,8 @@ export interface HelperDef {
   blurb: string;
   instructions: string;
   builtIn?: boolean;
+  /** May look things up (wikis, and the web if set up). */
+  research?: boolean;
 }
 
 export interface HelperMessage {
@@ -211,6 +213,8 @@ export interface HelperMessage {
   content: string;
   /** Suggestions this assistant turn produced. */
   suggestionIds?: string[];
+  /** A 'tool' message: the lookups that were run, with links. */
+  lookups?: { label: string; sources: { title: string; url: string }[] }[];
   createdAt: number;
 }
 
@@ -299,6 +303,8 @@ export interface AppSettings {
   uiFontSize?: number;
   /** Library: notes sent with every chat that has them on. */
   globalNotes?: string;
+  /** Optional web search proxy (see worker/README.md); wikis work without it. */
+  searchProxy?: string;
   /** Per-job model overrides (Settings, Models, Advanced). */
   jobModels?: JobModels;
   /** Defaults for new chats. */

@@ -352,3 +352,7 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .lore-import input[type=checkbox] { width: auto; flex: none; }
 .lore-entry > span { flex: 1; min-width: 0; }
 .lore-cat { justify-content: flex-start; }
+.helper-lookups { font-size: 12px; border-left: 2px solid var(--line); padding-left: 8px; }
+.helper-lookups summary { cursor: pointer; }
+.helper-lookups ul { margin: 4px 0; padding-left: 18px; }
+.lookup-text { white-space: pre-wrap; max-height: 240px; overflow-y: auto; background: var(--bg); padding: 6px; border-radius: 6px; color: var(--muted); }

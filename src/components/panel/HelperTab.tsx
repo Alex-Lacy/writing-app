@@ -48,6 +48,17 @@ export function HelperTab() {
       <p className="muted small">{helper.blurb} It sees this story's setup and recent text, and suggests changes for you to accept.</p>
       <div className="helper-log">
         {thread?.messages.map((m, i) => (
+          m.role === 'tool' ? (
+            <details key={i} className="helper-lookups">
+              <summary className="muted small">🔎 {m.lookups?.map((l) => l.label).join(' · ') || 'Looked things up'}</summary>
+              {m.lookups?.some((l) => l.sources.length) && (
+                <ul className="small">
+                  {m.lookups.flatMap((l) => l.sources).map((x) => <li key={x.url}><a href={x.url} target="_blank" rel="noreferrer">{x.title}</a></li>)}
+                </ul>
+              )}
+              <pre className="lookup-text small">{m.content.slice(0, 4000)}{m.content.length > 4000 ? '\n…' : ''}</pre>
+            </details>
+          ) : (
           <div key={i} className={`helper-msg ${m.role}`}>
             {m.role === 'user' ? <p>{m.content}</p> : <div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }} />}
             {!busy && (
@@ -67,6 +78,7 @@ export function HelperTab() {
               <button className="small primary" onClick={async () => { for (const id of m.suggestionIds!) await accept(id); }}>Accept all</button>
             )}
           </div>
+          )
         ))}
         {live !== undefined && mine && (
           <div className="helper-msg assistant">
@@ -85,7 +97,7 @@ export function HelperTab() {
         <textarea
           rows={3}
           value={text}
-          placeholder={helper.id === 'helper-new-story' ? 'Describe the story you want to write…' : 'What would you like to change?'}
+          placeholder={helper.id === 'helper-new-story' ? 'Describe the story you want to write…' : helper.id === 'helper-research' ? 'What should we look into? e.g. "The Witcher: Yennefer and Geralt before the books start"' : 'What would you like to change?'}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }}
         />
@@ -115,6 +127,7 @@ function HelperProgress({ live }: { live: NonNullable<ReturnType<typeof useStore
     : live.phase === 'writing' ? 'Writing'
     : live.phase === 'thinking' ? `Thinking it through (~${words.toLocaleString()} words)`
     : live.phase === 'sent' ? 'Waiting for the model to start'
+    : live.phase === 'looking' ? (live.doing || 'Looking things up')
     : live.phase === 'busy' ? 'Your plan is busy with another request; trying again shortly'
     : 'Queued behind another job';
   return (

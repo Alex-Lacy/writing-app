@@ -29,6 +29,10 @@ http.createServer(async (req, res) => {
     res.end('data: [DONE]\n\n');
   };
   // Side jobs, recognised by their system prompts.
+  if (sys.includes('# Looking things up') && JSON.stringify(j.messages.slice(1)).includes('Yennefer')) {
+    if (String(last.content).startsWith('# Lookup results')) return reply('From the wiki, Yennefer is a sorceress from Vengerberg.\n```changes\n[{"type":"codex-add","name":"Yennefer","keys":["Yennefer"],"text":"A sorceress from Vengerberg."}]\n```');
+    return reply('Checking the wiki.\n```lookup\n[{"tool":"search","wiki":"witcher","query":"Yennefer"},{"tool":"read","wiki":"witcher","page":"Yennefer of Vengerberg"}]\n```');
+  }
   if (sys.includes('You tidy Codex entries')) {
     const first = String(last.content).match(/^## (.+)$/m)?.[1];
     return reply(first ? JSON.stringify([{ type: 'codex-edit', entry: first, text: `${first}, tidied.`, keys: [first], reason: 'removed leftover brackets' }]) : '[]');
