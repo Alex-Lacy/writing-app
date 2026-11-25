@@ -17,11 +17,13 @@ http.createServer(async (req, res) => {
   lastBody = j;
   const last = j.messages.at(-1);
   const sys = String(j.messages[0]?.content ?? '');
+  // SLOWHELP in the last message streams slowly, to test closing the panel mid-reply.
+  const slow = String(last.content).includes('SLOWHELP');
   const reply = async (text) => {
     res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream' });
     for (const c of text.match(/[\s\S]{1,20}/g)) {
       res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: c } }] })}\n\n`);
-      await new Promise((r) => setTimeout(r, 5));
+      await new Promise((r) => setTimeout(r, slow ? 120 : 5));
     }
     res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: Math.round(body.length / 3.6), completion_tokens: 50 } })}\n\n`);
     res.end('data: [DONE]\n\n');

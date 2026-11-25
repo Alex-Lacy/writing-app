@@ -6,7 +6,7 @@ import { estimateTokens } from '../context/tokens';
 import { repo } from '../db/db';
 import { uid } from '../lib/id';
 import { useStore } from '../store/store';
-import { addSuggestions } from '../store/suggestions';
+import { addSuggestions, reject } from '../store/suggestions';
 import type { HelperDef, HelperThread } from '../types';
 import { BUILTIN_HELPERS, PROTOCOL } from './starters';
 import { setupText, transcript } from './storyText';
@@ -47,21 +47,76 @@ async function saveThread(t: HelperThread) {
   await repo.put('helperThreads', next);
 }
 
+let helperAbort: AbortController | undefined;
+/** Set by Start over: the reply being stopped is thrown away, not kept. */
+let discard = false;
+
 export async function clearThread(chatId: string, helperId: string) {
+  if (busyFor(chatId, helperId)) {
+    discard = true;
+    stopHelper();
+  }
   const t = await threadFor(chatId, helperId);
   useStore.setState({ helperThreads: useStore.getState().helperThreads.filter((x) => x.id !== t.id) });
   await repo.del('helperThreads', t.id);
 }
 
-/** Sends a message to a Helper; the reply streams into the thread and its changes become cards. */
-export async function askHelper(chatId: string, helperId: string, text: string, onText?: (t: string) => void) {
+const setLive = (v: ReturnType<typeof useStore.getState>['helperLive']) => useStore.setState({ helperLive: v });
+const busyFor = (chatId: string, helperId: string) => {
+  const l = useStore.getState().helperLive;
+  return !!l && !l.error && l.chatId === chatId && l.helperId === helperId;
+};
+/** Whether any Helper is replying right now. */
+export const helperBusy = () => !!useStore.getState().helperLive && !useStore.getState().helperLive?.error;
+
+/** Sends a message to a Helper; the reply runs in the background and its changes become cards. */
+export async function askHelper(chatId: string, helperId: string, text: string) {
+  if (!text.trim() || helperBusy()) return;
+  const thread = await threadFor(chatId, helperId);
+  await saveThread({ ...thread, messages: [...thread.messages, { role: 'user', content: text.trim(), createdAt: Date.now() }] });
+  await reply(chatId, helperId);
+}
+
+/** Stops the Helper reply; what it wrote so far is kept. */
+export function stopHelper() {
+  helperAbort?.abort();
+}
+
+/** Asks again for the last reply (the old one and its open cards are dropped). */
+export async function retryHelper(chatId: string, helperId: string) {
+  if (helperBusy()) return;
+  const t = await threadFor(chatId, helperId);
+  const last = t.messages.at(-1);
+  if (last?.role === 'assistant') await dropMessages(t, t.messages.length - 1, t.messages.length);
+  await reply(chatId, helperId);
+}
+
+/** Deletes one message (an assistant one takes its open cards with it). */
+export async function deleteHelperMessage(chatId: string, helperId: string, index: number) {
+  if (busyFor(chatId, helperId)) return;
+  await dropMessages(await threadFor(chatId, helperId), index, index + 1);
+}
+
+/** Removes a message of yours and everything after it, and gives back its text to edit and resend. */
+export async function editHelperMessage(chatId: string, helperId: string, index: number): Promise<string> {
+  if (busyFor(chatId, helperId)) return '';
+  const t = await threadFor(chatId, helperId);
+  const text = t.messages[index]?.content ?? '';
+  await dropMessages(t, index, t.messages.length);
+  return text;
+}
+
+async function dropMessages(t: HelperThread, from: number, to: number) {
+  for (const m of t.messages.slice(from, to)) for (const id of m.suggestionIds ?? []) await reject(id);
+  await saveThread({ ...t, messages: [...t.messages.slice(0, from), ...t.messages.slice(to)] });
+}
+
+async function reply(chatId: string, helperId: string) {
   const s = useStore.getState();
   const chat = s.chats.find((c) => c.id === chatId);
   const helper = helpersList().find((h) => h.id === helperId);
-  if (!chat || !helper || !text.trim()) return;
-  let thread = await threadFor(chatId, helperId);
-  thread = { ...thread, messages: [...thread.messages, { role: 'user', content: text.trim(), createdAt: Date.now() }] };
-  await saveThread(thread);
+  const thread = await threadFor(chatId, helperId);
+  if (!chat || !helper || thread.messages.at(-1)?.role !== 'user') return;
 
   // Recent story, newest last, within budget.
   const msgs = chatId === s.currentChatId ? s.messages : await repo.messages(chatId);
@@ -75,21 +130,43 @@ export async function askHelper(chatId: string, helperId: string, text: string, 
   const others = s.chats.filter((c) => c.id !== chatId).slice(0, 30).map((c) => `#${c.num} ${c.title}`).join(', ');
   const context = `# This story: #${chat.num} "${chat.title}"\n${setupText(chat) || '(Nothing set up yet.)'}\n\n# Recent story\n${transcript(recent) || '(No story written yet.)'}${others ? `\n\n# Other stories\n${others}` : ''}`;
 
-  const res = await runJob({
-    job: 'helper',
-    chat,
-    label: `${helper.name} is thinking`,
-    maxTokens: 3000,
-    temperature: 0.6,
-    onText,
-    messages: [
-      { role: 'system', content: `${helper.instructions}\n${PROTOCOL}\n\n${context}` },
-      ...thread.messages.map((m) => ({ role: m.role === 'user' ? ('user' as const) : ('assistant' as const), content: m.content })),
-    ],
-  });
-  const { say, changes } = splitReply(res.text);
+  helperAbort = new AbortController();
+  discard = false;
+  setLive({ chatId, helperId, text: '' });
+  let text = '';
+  try {
+    const res = await runJob({
+      job: 'helper',
+      chat,
+      label: `${helper.name} is thinking`,
+      maxTokens: 3000,
+      temperature: 0.6,
+      signal: helperAbort.signal,
+      onText: (t) => {
+        text = t;
+        setLive({ chatId, helperId, text: t.replace(/```changes[\s\S]*$/i, '') });
+      },
+      messages: [
+        { role: 'system', content: `${helper.instructions}\n${PROTOCOL}\n\n${context}` },
+        ...thread.messages.map((m) => ({ role: m.role === 'user' ? ('user' as const) : ('assistant' as const), content: m.content })),
+      ],
+    });
+    text = res.text;
+  } catch (e) {
+    if ((e as Error).name !== 'AbortError') {
+      setLive({ chatId, helperId, text: '', error: (e as Error).message });
+      return;
+    }
+    if (!text.trim() || discard) return setLive(undefined); // stopped before it said anything, or Start over
+  } finally {
+    helperAbort = undefined;
+  }
+  const { say, changes } = splitReply(text);
   const fresh = useStore.getState().chats.find((c) => c.id === chatId) ?? chat;
   const cards = await addSuggestions(chatId, toSuggestions(fresh, changes, 'helper'));
-  thread = await threadFor(chatId, helperId);
-  await saveThread({ ...thread, messages: [...thread.messages, { role: 'assistant', content: say || (cards.length ? 'Here are my suggestions.' : '…'), suggestionIds: cards.map((c) => c.id), createdAt: Date.now() }] });
+  const t = await threadFor(chatId, helperId);
+  await saveThread({ ...t, messages: [...t.messages, { role: 'assistant', content: say || (cards.length ? 'Here are my suggestions.' : '…'), suggestionIds: cards.map((c) => c.id), createdAt: Date.now() }] });
+  const now = useStore.getState();
+  const seen = now.panel === 'chat-settings' && now.panelTab === 'helper' && now.currentChatId === chatId && (now.helperId ?? helperId) === helperId;
+  useStore.setState({ helperLive: undefined, helperDone: seen ? undefined : { chatId, helperId } });
 }

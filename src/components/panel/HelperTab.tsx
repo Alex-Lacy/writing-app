@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { askHelper, clearThread, helpersList } from '../../features/helper';
+import { askHelper, clearThread, deleteHelperMessage, editHelperMessage, helpersList, retryHelper, stopHelper } from '../../features/helper';
 import { renderMarkdown } from '../../lib/markdown';
 import { currentChat, ui, useStore } from '../../store/store';
 import { SuggestionCard } from './SuggestionCard';
@@ -13,30 +13,27 @@ export function HelperTab() {
   const suggestions = useStore((s) => s.suggestions);
   const hasStory = useStore((s) => s.messages.length > 0);
   const [text, setText] = useState('');
-  const [live, setLive] = useState<string>();
-  const [error, setError] = useState('');
+  const anyLive = useStore((s) => s.helperLive);
   const end = useRef<HTMLDivElement>(null);
   const helpers = helpersList();
   const fresh = !hasStory && !chat?.writing.background.trim();
   const helper = helpers.find((h) => h.id === chosen) ?? helpers.find((h) => h.id === (fresh ? 'helper-new-story' : 'helper-setup'))!;
   const thread = chat && threads.find((t) => t.chatId === chat.id && t.helperId === helper.id);
+  // The reply runs in the background, so it is shown from the store: closing the panel loses nothing.
+  const mine = anyLive && chat && anyLive.chatId === chat.id && anyLive.helperId === helper.id ? anyLive : undefined;
+  const live = mine && !mine.error ? mine.text : undefined;
+  const busy = !!anyLive && !anyLive.error; // one Helper reply at a time
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [thread?.messages.length, live]);
   if (!chat) return null;
 
-  const send = async () => {
+  const send = () => {
     const t = text.trim();
-    if (!t || live !== undefined) return;
+    if (!t || busy) return;
     setText('');
-    setError('');
-    setLive('');
-    try {
-      await askHelper(chat.id, helper.id, t, (x) => setLive(x.replace(/```changes[\s\S]*$/i, '')));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLive(undefined);
-    }
+    void askHelper(chat.id, helper.id, t);
   };
+  const edit = async (i: number) => setText(await editHelperMessage(chat.id, helper.id, i));
+  const count = thread?.messages.length ?? 0;
 
   return (
     <div className="panel-body helper">
@@ -45,13 +42,22 @@ export function HelperTab() {
           {helpers.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
         </select>
         <span className="spacer" />
-        {thread && thread.messages.length > 0 && <button className="small ghost" onClick={() => clearThread(chat.id, helper.id)}>Start over</button>}
+        {count > 0 && <button className="small ghost" onClick={() => confirm('Clear this conversation? Its open suggestions stay in Suggestions.') && clearThread(chat.id, helper.id)}>Start over</button>}
       </div>
       <p className="muted small">{helper.blurb} It sees this story's setup and recent text, and suggests changes for you to accept.</p>
       <div className="helper-log">
         {thread?.messages.map((m, i) => (
           <div key={i} className={`helper-msg ${m.role}`}>
             {m.role === 'user' ? <p>{m.content}</p> : <div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }} />}
+            {!busy && (
+              <div className="helper-actions">
+                <button className="ghost" onClick={() => void navigator.clipboard.writeText(m.content)}>Copy</button>
+                {m.role === 'user' && <button className="ghost" onClick={() => void edit(i)} title={i < count - 1 ? 'Edit and send again (the replies after it are removed)' : 'Edit and send again'}>Edit</button>}
+                {m.role === 'assistant' && i === count - 1 && <button className="ghost" onClick={() => void retryHelper(chat.id, helper.id)} title="Ask again for this reply">Retry</button>}
+                {m.role === 'user' && i === count - 1 && <button className="ghost" onClick={() => void retryHelper(chat.id, helper.id)} title="Send this again">Resend</button>}
+                <button className="ghost" onClick={() => void deleteHelperMessage(chat.id, helper.id, i)}>Delete</button>
+              </div>
+            )}
             {m.suggestionIds?.map((id) => {
               const x = suggestions.find((s) => s.id === id);
               return x ? <SuggestionCard key={id} x={x} hideSource /> : null;
@@ -61,8 +67,16 @@ export function HelperTab() {
             )}
           </div>
         ))}
-        {live !== undefined && <div className="helper-msg assistant"><div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(live) || '<span class="muted">Thinking…</span>' }} /></div>}
-        {error && <p className="error small">{error}</p>}
+        {live !== undefined && (
+          <div className="helper-msg assistant">
+            <div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(live) || '<span class="muted">Thinking… (you can close this panel; the reply will be here)</span>' }} />
+          </div>
+        )}
+        {mine?.error && (
+          <p className="error small">
+            {mine.error} <button className="small ghost" onClick={() => void retryHelper(chat.id, helper.id)}>Try again</button>
+          </p>
+        )}
         <div ref={end} />
       </div>
       <div className="helper-input">
@@ -73,7 +87,9 @@ export function HelperTab() {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }}
         />
-        <button className="primary" disabled={!text.trim() || live !== undefined} onClick={send}>Send</button>
+        {live !== undefined
+          ? <button onClick={stopHelper} title="Stop; what it has written so far is kept">Stop</button>
+          : <button className="primary" disabled={!text.trim() || busy} onClick={send} title={busy ? 'Another Helper is replying' : undefined}>Send</button>}
       </div>
     </div>
   );

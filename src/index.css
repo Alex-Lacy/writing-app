@@ -328,3 +328,10 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
   .model-row .model-id { white-space: normal; word-break: break-all; }
 }
 .word-count { font-size: 12px; margin-left: 8px; white-space: nowrap; }
+.jobs.done { color: var(--accent); }
+.jobs.link { cursor: pointer; text-decoration: underline dotted; }
+.helper-actions { display: flex; gap: 2px; flex-wrap: wrap; margin-top: 2px; opacity: 0; transition: opacity .15s; }
+.helper-msg:hover .helper-actions, .helper-msg:focus-within .helper-actions, .helper-msg:last-of-type .helper-actions { opacity: 1; }
+.helper-actions button { font-size: 12px; padding: 1px 6px; border: none; color: var(--muted); background: none; }
+.helper-actions button:hover { color: var(--fg); }
+@media (hover: none) { .helper-actions { opacity: 1; } }

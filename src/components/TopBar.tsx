@@ -1,5 +1,11 @@
 import { useDeferredValue, useMemo } from 'react';
-import { replyReserve, saveSettings, previewFor, contextLimitFor, currentChat, modelLabel, ui, updateChat, useStore } from '../store/store';
+import { selectChat, replyReserve, saveSettings, previewFor, contextLimitFor, currentChat, modelLabel, ui, updateChat, useStore } from '../store/store';
+
+/** Opens a Helper's conversation, switching story first if it belongs to another. */
+async function openHelperAt(at: { chatId: string; helperId: string }) {
+  if (useStore.getState().currentChatId !== at.chatId) await selectChat(at.chatId);
+  ui.openHelper(at.helperId);
+}
 
 export function TopBar() {
   const chat = useStore((s) => currentChat(s));
@@ -10,6 +16,8 @@ export function TopBar() {
   const panel = useStore((s) => s.panel);
   const limit = useStore((s) => contextLimitFor(currentChat(s), s));
   const jobs = useStore((s) => s.jobs);
+  const helperLive = useStore((s) => s.helperLive);
+  const helperDone = useStore((s) => s.helperDone);
   const pending = useStore((s) => s.suggestions.filter((x) => x.chatId === s.currentChatId && x.status === 'pending').length);
 
   // Deferred: typing in Setup shouldn't wait for a context rebuild on every key.
@@ -54,7 +62,9 @@ export function TopBar() {
           Σ<span className="label"> Auto-summary {chat.autoSummary !== false ? 'on' : 'off'}</span>
         </button>
       )}
-      {jobs.length > 0 && <span className="jobs muted small" title={jobs.map((j) => j.label).join(', ')}>⟳ {jobs[0].label}…</span>}
+      {jobs.length > 0 && <span className={`jobs muted small${helperLive ? ' link' : ''}`} title={jobs.map((j) => j.label).join(', ')} onClick={helperLive ? () => openHelperAt(helperLive) : undefined}>⟳ {jobs[0].label}…</span>}
+      {helperLive && !jobs.length && <button className="jobs small ghost" onClick={() => openHelperAt(helperLive)}>{helperLive.error ? '⚠ Helper failed' : '⟳ Helper is waiting…'}</button>}
+      {helperDone && !helperLive && <button className="jobs small ghost done" onClick={() => openHelperAt(helperDone)} title="Open the Helper's reply">● Helper replied</button>}
       <button className="icon" onClick={() => ui.setFocus(true)} title="Full-screen reading: hide everything but the story (Esc to leave)">⤢</button>
       {chat && (
         <button className={`icon panel-btn${panel === 'chat-settings' ? ' active' : ''}`} onClick={() => (pending ? ui.openPanel('suggestions') : ui.setPanel('chat-settings'))} title={pending ? `${pending} suggestions to review` : 'Story panel: setup, Codex, Helper, suggestions'}>

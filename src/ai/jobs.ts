@@ -120,6 +120,7 @@ export interface JobResult {
 export function runJob(o: RunJobOptions): Promise<JobResult> {
   const run = async (): Promise<JobResult> => {
     await waitForStoryReply();
+    if (o.signal?.aborted) throw new DOMException('Stopped before it started', 'AbortError');
     const m = jobModel(o.job, o.chat);
     if (!m) throw new Error('Pick a model first (Settings, then Models).');
     const id = Math.random().toString(36).slice(2);

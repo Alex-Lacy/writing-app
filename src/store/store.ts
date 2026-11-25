@@ -52,6 +52,10 @@ interface State {
   compileOpen: boolean;
   /** Shown while a reply waits for a Helper or Proofread job to finish. */
   waiting?: string;
+  /** A Helper reply in progress (kept here so closing the panel doesn't lose it), or its error. */
+  helperLive?: { chatId: string; helperId: string; text: string; error?: string };
+  /** A Helper replied while its tab wasn't showing. */
+  helperDone?: { chatId: string; helperId: string };
 }
 
 /** `text` is the highlighted passage, found again if the message changed since (an auto fix). */
@@ -719,9 +723,9 @@ export const ui = {
   setFocus: (on: boolean) => set({ focus: on, sidebarOpen: false }),
   setPanel: (panel: Panel) => set({ panel: get().panel === panel ? 'none' : panel }),
   /** Opens the Story panel on a tab. */
-  openPanel: (tab: PanelTab) => set({ panel: 'chat-settings', panelTab: tab }),
+  openPanel: (tab: PanelTab) => set({ panel: 'chat-settings', panelTab: tab, ...(tab === 'helper' ? { helperDone: undefined } : {}) }),
   setPanelTab: (tab: PanelTab) => set({ panelTab: tab }),
-  openHelper: (helperId: string) => set({ panel: 'chat-settings', panelTab: 'helper', helperId }),
+  openHelper: (helperId: string) => set({ panel: 'chat-settings', panelTab: 'helper', helperId, helperDone: undefined }),
   openSettings: (open: boolean, tab: SettingsTab = 'providers') => set({ settingsOpen: open, settingsTab: tab }),
   setSettingsTab: (tab: SettingsTab) => set({ settingsTab: tab }),
   openContext: (open: boolean) => set({ contextOpen: open }),
