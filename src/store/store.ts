@@ -82,11 +82,12 @@ export const useStore = create<State>()(() => ({
   codex: [],
   suggestions: [],
   helperThreads: [],
-  panelTab: 'setup',
+  panelTab: (saved('ui:panelTab') as PanelTab) ?? 'setup',
   jobs: [],
   messages: [],
   sidebarOpen: false,
-  panel: 'none',
+  // The side panel reopens after a reload on wide screens, where it doesn't cover the story.
+  panel: (typeof innerWidth !== 'undefined' && innerWidth > 860 && (saved('ui:panel') as Panel)) || 'none',
   settingsOpen: false,
   settingsTab: 'providers',
   contextOpen: false,
@@ -98,6 +99,14 @@ export const useStore = create<State>()(() => ({
 
 const get = useStore.getState;
 const set = useStore.setState;
+
+/** Small UI memory kept in localStorage (panel, tab, last Helper per story). */
+export function saved(key: string): string | undefined {
+  try { return localStorage.getItem(key) ?? undefined; } catch { return undefined; }
+}
+function save(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* storage unavailable */ }
+}
 
 export const currentChat = (s: State = get()) => s.chats.find((c) => c.id === s.currentChatId);
 
@@ -293,7 +302,7 @@ export async function deleteChat(id: string) {
   void import('../sync/units').then((u) => u.noteGone(id));
   // Its unsent drafts too.
   try {
-    for (const k of Object.keys(localStorage)) if (k.startsWith('draft:') && k.includes(id)) localStorage.removeItem(k);
+    for (const k of Object.keys(localStorage)) if ((k.startsWith('draft:') || k.startsWith('lastHelper:')) && k.includes(id)) localStorage.removeItem(k);
   } catch {
     /* storage blocked */
   }
@@ -752,11 +761,16 @@ export const ui = {
     else void saveSettings({ sidebarHidden: open === undefined ? !get().settings.sidebarHidden : !open });
   },
   setFocus: (on: boolean) => set({ focus: on, sidebarOpen: false }),
-  setPanel: (panel: Panel) => set({ panel: get().panel === panel ? 'none' : panel }),
+  setPanel: (panel: Panel) => { const next = get().panel === panel ? 'none' : panel; save('ui:panel', next); set({ panel: next }); },
   /** Opens the Story panel on a tab. */
-  openPanel: (tab: PanelTab) => set({ panel: 'chat-settings', panelTab: tab, ...(tab === 'helper' ? { helperDone: undefined } : {}) }),
-  setPanelTab: (tab: PanelTab) => set({ panelTab: tab }),
-  openHelper: (helperId: string) => set({ panel: 'chat-settings', panelTab: 'helper', helperId, helperDone: undefined }),
+  openPanel: (tab: PanelTab) => { save('ui:panel', 'chat-settings'); save('ui:panelTab', tab); set({ panel: 'chat-settings', panelTab: tab, ...(tab === 'helper' ? { helperDone: undefined } : {}) }); },
+  setPanelTab: (tab: PanelTab) => { save('ui:panelTab', tab); set({ panelTab: tab }); },
+  openHelper: (helperId: string) => {
+    const id = get().currentChatId;
+    if (id) save(`lastHelper:${id}`, helperId);
+    save('ui:panel', 'chat-settings'); save('ui:panelTab', 'helper');
+    set({ panel: 'chat-settings', panelTab: 'helper', helperId, helperDone: undefined });
+  },
   openSettings: (open: boolean, tab: SettingsTab = 'providers') => set({ settingsOpen: open, settingsTab: tab }),
   setSettingsTab: (tab: SettingsTab) => set({ settingsTab: tab }),
   openContext: (open: boolean) => set({ contextOpen: open }),

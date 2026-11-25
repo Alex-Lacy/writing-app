@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { askHelper, clearThread, deleteHelperMessage, editHelperMessage, helpersList, retryHelper, stopHelper } from '../../features/helper';
 import { renderMarkdown } from '../../lib/markdown';
-import { currentChat, ui, useStore } from '../../store/store';
+import { currentChat, saved, ui, useStore } from '../../store/store';
 import { jobModelName } from '../../ai/jobs';
 import { SuggestionCard } from './SuggestionCard';
 import { useStickyScroll } from '../useStickyScroll';
@@ -20,7 +20,9 @@ export function HelperTab() {
   const anyLive = useStore((s) => s.helperLive);
   const helpers = helpersList();
   const fresh = !hasStory && !chat?.writing.background.trim();
-  const helper = helpers.find((h) => h.id === chosen) ?? helpers.find((h) => h.id === (fresh ? 'helper-new-story' : 'helper-setup'))!;
+  // Each story remembers the Helper you last used with it, through reloads.
+  const last = chat ? saved(`lastHelper:${chat.id}`) : undefined;
+  const helper = helpers.find((h) => h.id === last) ?? helpers.find((h) => h.id === chosen) ?? helpers.find((h) => h.id === (fresh ? 'helper-new-story' : 'helper-setup'))!;
   // Unsent text is kept per story and Helper, through tab switches and reloads.
   const [text, setText] = useDraft(chat ? `helper:${chat.id}:${helper.id}` : undefined);
   // Grows upward with what's typed (the box sits at the bottom), up to half the window.
