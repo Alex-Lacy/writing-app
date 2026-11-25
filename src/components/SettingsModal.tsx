@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { repo } from '../db/db';
 import { uid } from '../lib/id';
 import { friendlyError, listModelsPage, PAGE_SIZE, type RemoteModel } from '../providers/openai';
@@ -305,6 +305,29 @@ function JobModelsSection() {
   );
 }
 
+/** Whether the browser has promised not to clear our data when space runs low (Safari clears unused sites' data). */
+function StorageStatus() {
+  const [st, setSt] = useState<{ persisted: boolean; used?: number } | null>(null);
+  useEffect(() => {
+    void (async () => {
+      if (!navigator.storage?.persisted) return;
+      const est = await navigator.storage.estimate?.();
+      setSt({ persisted: await navigator.storage.persisted(), used: est?.usage });
+    })();
+  }, []);
+  if (!st) return null;
+  const mb = st.used !== undefined ? ` Using about ${Math.max(1, Math.round(st.used / 1e6))} MB.` : '';
+  return st.persisted
+    ? <p className="muted small">✓ Storage is protected: the browser won't clear it to free space.{mb}</p>
+    : (
+      <p className="small">
+        The browser may clear this data if the device runs low on space or the app goes unused for a long time
+        (Safari does this after a few weeks). Installing the app usually protects it.{mb}{' '}
+        <button className="small ghost" onClick={async () => setSt({ ...st, persisted: !!(await navigator.storage.persist?.()) })}>Ask to keep it</button>
+      </p>
+    );
+}
+
 function Data() {
   const [msg, setMsg] = useState('');
   const exportAll = async () => {
@@ -327,7 +350,8 @@ function Data() {
   };
   return (
     <div>
-      <p className="muted small">Everything is stored locally in this browser. Back up regularly until sync arrives. API keys are not included in exports.</p>
+      <p className="muted small">Everything is stored on this device, in this browser. Nothing is sent anywhere except the requests to your AI provider. Export a backup now and then: it's also how you move your stories to another device. API keys are not included.</p>
+      <StorageStatus />
       <div className="row">
         <button onClick={exportAll}>Export backup</button>
         <label className="button ghost">Import backup<input type="file" accept="application/json" hidden onChange={(e) => e.target.files?.[0] && importAll(e.target.files[0])} /></label>
