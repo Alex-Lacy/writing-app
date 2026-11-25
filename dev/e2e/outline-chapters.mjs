@@ -1,0 +1,37 @@
+// Outline with chapters and "!" moments only: the first reply plans chapter 1's scenes (keeping
+// the moment word for word), the chapter list is sent, beats move on by themselves.
+import { chromium } from 'playwright-core';
+const b = await chromium.launch({ executablePath: process.env.CHROME });
+const p = await b.newPage({ viewport: { width: 1280, height: 900 } });
+const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+await p.goto('http://127.0.0.1:5173');
+await p.waitForSelector('.modal');
+const card = p.locator('.card').first();
+await card.locator('.provider-more summary').click();
+await card.getByLabel('Address (base URL)').fill('http://localhost:8787/v1');
+await card.getByLabel('Name', { exact: true }).fill('Mock');
+await card.locator('input[type=password]').fill('test-key');
+await card.getByText('Test connection').click();
+await p.waitForSelector('text=Connected, 2 models');
+await card.getByText('Pick models').click();
+await p.getByText('Fetch model list').click();
+await p.locator('.remote-row button').nth(0).click();
+await p.locator('.modal-head .icon').click();
+await p.getByRole('button', { name: '+ New story' }).click();
+await p.locator('.panel-tabs button:has-text("Setup")').click();
+const ta = p.locator('.src-outline textarea');
+await ta.fill("# Chapter 1: Harrowgate. Mara takes a job.\n! Rell hands her a sealed letter.\n# Chapter 2: The docks. It goes wrong.\n# Chapter 3: Betrayal.");
+console.log('hint:', (await p.locator('.src-outline p.muted').nth(1).innerText()).slice(0, 90));
+await p.getByRole('button', { name: 'Plan them now' }).click();
+await p.waitForFunction(() => document.querySelector('.src-outline textarea').value.includes('An opening scene.'), null, { timeout: 30000 });
+console.log('planned:\n' + (await ta.inputValue()));
+await p.locator('.composer textarea').fill('Mara walks in.');
+await p.keyboard.press('Enter');
+const body = await (await p.waitForResponse((r) => r.url().includes('/chat/completions') && r.request().postData()?.includes('Mara walks in'))).request().postDataJSON();
+const sent = JSON.stringify(body.messages);
+console.log('chapter list sent:', sent.includes('(current chapter)'), '| scene goal:', /Current chapter: Chapter 1[^\]]*Current scene goal: An opening scene/.test(sent));
+await p.waitForFunction(() => /> ! Rell hands her a sealed letter/.test(document.querySelector('.src-outline textarea').value), null, { timeout: 30000 });
+console.log('moved on by itself to:', (await p.locator('.outline-nav').innerText()).replace(/\n/g, ' '));
+await p.locator('.src-outline').screenshot({ path: '/tmp/outline-ch.png' });
+console.log('errors:', errs);
+await b.close();

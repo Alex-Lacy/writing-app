@@ -73,6 +73,8 @@ async function acceptNow(id: string, edited?: string) {
       if ((chat.outline?.text ?? '') !== (x.before ?? '')) return fail(x, 'the Outline was changed after this was suggested.');
       undo = chat.outline?.text ?? '';
       await updateChat({ outline: { ...chat.outline, text: after } }, chat.id);
+      // A chapter with only a heading gets its scenes written out straight away.
+      void import('../features/outline').then((m) => m.planNextChapter(chat.id));
       break;
     case 'outline-next': {
       const text = chat.outline?.text ?? '';

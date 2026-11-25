@@ -157,7 +157,7 @@ async function reply(chatId: string, helperId: string) {
         job: 'helper',
         chat,
         label: `${helper.name} is thinking`,
-        maxTokens: 3000,
+        maxTokens: 8000, // room for a whole long outline in one reply
         temperature: 0.6,
         signal: helperAbort.signal,
         onText: (t) => {

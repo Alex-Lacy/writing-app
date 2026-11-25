@@ -26,11 +26,12 @@ await p.keyboard.press('Enter');
 const body = await (await p.waitForResponse((r) => r.url().includes('/chat/completions') && r.request().postData()?.includes('Mara listens'))).request().postDataJSON();
 const sent = JSON.stringify(body.messages);
 console.log('sent current beat:', sent.includes('Current scene goal: Rell offers her a job.'), '| ahead:', sent.includes('The job goes wrong at the docks. Then: Mara learns'), '| finished beat sent:', sent.includes('Mara arrives in Harrowgate'));
+// Moves on by itself by default; the card stays in Suggestions, accepted, for undo.
+await p.waitForFunction(() => /Beat 3 of 4/.test(document.querySelector('.outline-nav')?.textContent ?? ''), null, { timeout: 20000 });
 await p.locator('.panel-tabs button:has-text("Suggestions")').click();
-await p.waitForSelector('text=Outline: move to the next beat', { timeout: 20000 }).catch(async () => console.log('FAIL', errs, await p.locator('.panel-body').innerText()));
-await p.locator('.sg-card', { hasText: 'Outline: move to the next beat' }).getByRole('button', { name: 'Accept' }).click();
+console.log('card kept for undo:', await p.locator('text=Outline: move to the next beat').count());
 await p.locator('.panel-tabs button:has-text("Setup")').click();
-console.log('after accept:', await p.locator('.outline-nav').innerText());
+console.log('after reply:', await p.locator('.outline-nav').innerText());
 await p.locator('.src-outline').screenshot({ path: '/tmp/outline.png' });
 console.log('errors:', errs);
 await b.close();
