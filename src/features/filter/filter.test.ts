@@ -56,3 +56,15 @@ describe('sentenceAround quotes', () => {
     expect(t.slice(r2.from, r2.to)).toBe('He ran down her spine.');
   });
 });
+
+describe('fixes per reply', () => {
+  it('follows Length unless set', async () => {
+    const { autoLimitFor } = await import('./filter');
+    const c = (x: object) => x as Parameters<typeof autoLimitFor>[0];
+    expect(autoLimitFor(c({ length: 'short' }))).toBe(2);
+    expect(autoLimitFor(c({ length: 'chapter' }))).toBe(10);
+    expect(autoLimitFor(c({ length: 'any' }), 1000)).toBe(5);
+    expect(autoLimitFor(c({ length: 'any' }), 50)).toBe(2);
+    expect(autoLimitFor(c({ length: 'chapter', filter: { mode: 'auto', autoLimit: 3 } }))).toBe(3);
+  });
+});

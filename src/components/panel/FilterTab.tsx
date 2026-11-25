@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { clichesIn, DEFAULT_AUTO_LIMIT, filterMode } from '../../features/filter/filter';
+import { autoLimitFor, clichesIn, filterMode } from '../../features/filter/filter';
 import { compileRules } from '../../features/filter/rules';
 import { currentChat, saveSettings, updateChat, useStore } from '../../store/store';
 import { activeSwipe, type FilterMode } from '../../types';
@@ -49,7 +49,13 @@ export function FilterTab() {
         {mode === 'auto' && (
           <label className="field small">
             <span>Most fixes per reply</span>
-            <input type="number" min={1} max={12} value={chat.filter?.autoLimit ?? DEFAULT_AUTO_LIMIT} onChange={(e) => setFilter({ autoLimit: Math.max(1, Number(e.target.value) || DEFAULT_AUTO_LIMIT) })} />
+            <input
+              type="number" min={1} max={30}
+              placeholder={chat.length && chat.length !== 'any' ? `${autoLimitFor({ ...chat, filter: undefined })} (by Length)` : 'by reply size'}
+              value={chat.filter?.autoLimit ?? ''}
+              onChange={(e) => setFilter({ autoLimit: e.target.value === '' ? undefined : Math.max(1, Math.round(Number(e.target.value)) || 1) })}
+            />
+            <span className="muted small">Leave empty to follow the Length setting (2 for Short up to 16 for Story; with Any length, about one per 200 words).</span>
           </label>
         )}
       </section>

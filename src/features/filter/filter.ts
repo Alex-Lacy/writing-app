@@ -10,6 +10,15 @@ import { compileRules, scan, sentenceAround, type Hit } from './rules';
 
 export const DEFAULT_FILTER_MODE: FilterMode = 'highlight';
 export const DEFAULT_AUTO_LIMIT = 4;
+/** Fixes per reply when the user hasn't set a number: more room for longer replies. */
+const BY_LENGTH: Record<string, number> = { short: 2, medium: 3, long: 4, scene: 5, chapter: 10, story: 16 };
+export function autoLimitFor(chat: Chat | undefined, words?: number): number {
+  if (chat?.filter?.autoLimit) return chat.filter.autoLimit;
+  const fixed = BY_LENGTH[chat?.length ?? 'any'];
+  if (fixed) return fixed;
+  // Any length: about one per 200 words of the reply.
+  return words ? Math.min(16, Math.max(2, Math.ceil(words / 200))) : DEFAULT_AUTO_LIMIT;
+}
 
 export const filterMode = (chat?: Chat): FilterMode => chat?.filter?.mode ?? DEFAULT_FILTER_MODE;
 
@@ -96,7 +105,7 @@ replyHooks.push(async ({ chatId, message, newText }) => {
   const start = content.endsWith(newText) ? content.length - newText.length : 0;
   const hits = clichesIn(content, chat).filter((h) => h.from >= start);
   if (!hits.length) return;
-  const limit = chat.filter?.autoLimit ?? DEFAULT_AUTO_LIMIT;
+  const limit = autoLimitFor(chat, newText.split(/\s+/).filter(Boolean).length);
   await fixCliches(chatId, message.id, hits.slice(0, limit * 2), mode === 'auto' ? limit : 0);
   await tidy(chatId);
 });
