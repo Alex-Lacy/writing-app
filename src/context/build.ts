@@ -99,9 +99,14 @@ const SOURCE_LABEL: Record<Source, string> = {
   length: 'Length instruction',
   lore: 'Lorebook',
   summary: 'Story summary',
-  user: 'Your messages',
-  assistant: 'AI replies',
+  user: 'Your message',
+  assistant: 'AI reply',
   other: 'Other',
+};
+/** Chip label: the same name the legend uses, except lore entries keep their own names. */
+const labelOf = (b: ContextBlock): string => {
+  const src = sourceOf(b);
+  return src === 'lore' || src === 'other' ? b.label : SOURCE_LABEL[src];
 };
 export const sourceLabel = (s: Source) => SOURCE_LABEL[s];
 
@@ -156,8 +161,8 @@ export function buildContext(input: BuildInput): BuildResult {
   const tailBlocks = input.blocks.filter((b) => b.placement.kind === 'tail');
 
   const topParts: Part[] = [
-    ...(input.systemPrompt.trim() ? [mkPart('system', 'System prompt', input.systemPrompt.trim())] : []),
-    ...top.map((b) => mkPart(sourceOf(b), b.label, b.text)),
+    ...(input.systemPrompt.trim() ? [mkPart('system', SOURCE_LABEL.system, input.systemPrompt.trim())] : []),
+    ...top.map((b) => mkPart(sourceOf(b), labelOf(b), b.text)),
   ];
   const topText = topParts.map((p) => p.text).join('\n\n');
   const topTokens = topText ? estimateTokens(topText) + MESSAGE_OVERHEAD : 0;
@@ -183,7 +188,7 @@ export function buildContext(input: BuildInput): BuildResult {
   let body: Slot[] = kept.map((h) => ({
     role: h.role,
     content: h.content,
-    parts: [{ ...mkPart(h.role === 'assistant' ? 'assistant' : h.role === 'user' ? 'user' : 'other', h.role === 'assistant' ? 'AI reply' : h.role === 'user' ? 'Your message' : 'System message', textOf(h.content), h.id), tokens: tokensOf(h.content) }],
+    parts: [{ ...mkPart(h.role === 'assistant' ? 'assistant' : h.role === 'user' ? 'user' : 'other', h.role === 'assistant' ? SOURCE_LABEL.assistant : h.role === 'user' ? SOURCE_LABEL.user : 'Earlier system message', textOf(h.content), h.id), tokens: tokensOf(h.content) }],
   }));
 
   // Blocks at the same depth and mode share one message (strict templates dislike runs of
@@ -194,7 +199,7 @@ export function buildContext(input: BuildInput): BuildResult {
     const key = `${p.depth}|${p.mode}`;
     const g = groups.get(key) ?? { depth: p.depth, mode: p.mode, parts: [] };
     const text = p.mode === 'inline' && !blk.text.startsWith('[') ? `[${blk.label}: ${blk.text}]` : blk.text;
-    g.parts.push(mkPart(sourceOf(blk), blk.label, text));
+    g.parts.push(mkPart(sourceOf(blk), labelOf(blk), text));
     groups.set(key, g);
   }
   const lateParts: Part[] = [];
@@ -216,7 +221,7 @@ export function buildContext(input: BuildInput): BuildResult {
 
   // Tail blocks: end of the latest user message, or a new user message after a reply.
   if (tailBlocks.length || lateParts.length) {
-    const parts = [...lateParts, ...tailBlocks.map((b) => mkPart(sourceOf(b), b.label, b.text))];
+    const parts = [...lateParts, ...tailBlocks.map((b) => mkPart(sourceOf(b), labelOf(b), b.text))];
     const last = body.at(-1);
     if (last?.role === 'user') {
       let slot = last;

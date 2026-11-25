@@ -109,7 +109,14 @@ export function ChatSettingsPanel() {
               model; some models (DeepSeek, for one) move separate system messages to the top, which weakens the note.
             </p>
           </div>
-          <button className="ghost small" onClick={() => saveSettings({ defaultWriting: { ...w, memory: '', authorsNote: '' } })}>Use toggle + AN settings as default</button>
+          <button
+            className="ghost small"
+            title="New chats will start with Writing tools on or off as they are here, and with this Author's Note depth and placement. The Memory and Author's Note text are not copied."
+            onClick={() => saveSettings({ defaultWriting: { ...w, memory: '', authorsNote: '' } })}
+          >
+            Make these the defaults for new chats
+          </button>
+          <p className="muted small">Saves the on/off switch and the Author's Note depth and placement, not the text you wrote.</p>
         </fieldset>
       </section>
     </div>

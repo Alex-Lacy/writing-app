@@ -264,7 +264,7 @@ const LENGTH_ROOM: Record<string, number> = { any: 2048, short: 600, medium: 100
 export const THINKING_ROOM = 4096;
 export function replyReserve(chat: Chat, s: State = get()) {
   const m = modelFor(chat, s);
-  const thinks = m?.thinking && !(m.thinking === 'optional' && chat.thinking === 'off');
+  const thinks = thinksFor(chat, m);
   const room = (LENGTH_ROOM[chat.length ?? 'any'] ?? 2048) + (thinks ? THINKING_ROOM : 0);
   return chat.params.hardCap ? Math.min(room, chat.params.hardCap) : room;
 }
@@ -326,6 +326,18 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
   }
 
   const ctx = buildFor(chat, history);
+  // Thinking models can't pick up a half-written reply (the server would put a fresh think
+  // block in front of it), so for them Continue asks in words instead.
+  const contByAsking = !!cont && thinksFor(chat, model);
+  if (contByAsking) {
+    const last = ctx.messages.at(-1);
+    if (last?.role === 'user' && typeof last.content === 'string') last.content += '\n\n' + CONTINUE_ASK;
+    else ctx.messages.push({ role: 'user', content: CONTINUE_ASK });
+    const la = ctx.annotated.at(-1);
+    const part = { source: 'other' as const, label: 'Continue request', text: CONTINUE_ASK, tokens: Math.ceil(CONTINUE_ASK.length / 3.3) };
+    if (la?.role === 'user') la.parts.push(part);
+    else ctx.annotated.push({ role: 'user', parts: [part] });
+  }
   const params = { ...chat.params, maxTokens: sendMaxTokens(chat, ctx) };
   set({ lastContext: ctx, streamingId: target.id, error: undefined });
   abort = new AbortController();
@@ -371,7 +383,14 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
   const runOnce = async (extra?: Record<string, unknown>) => {
     for await (const ev of streamChat(provider, model.modelId, ctx.messages as WireMessage[], params, abort!.signal, extra)) {
       if (ev.type === 'content') {
-        swipe = { ...swipe, content: swipe.content + ev.text };
+        let text = ev.text;
+        // Servers drop the leading space of a continuation ("boots" + "splashing").
+        if (cont && swipe.content.length === startOffset && startOffset > 0) {
+          text = text.replace(/^\s+/, (ws) => (/\s$/.test(swipe.content) ? '' : ws));
+          if (/[\w.,;:!?"”'’)\]*]$/.test(swipe.content) && /^[A-Za-z0-9"“'‘(*]/.test(text) && !/\s$/.test(swipe.content)) text = ' ' + text;
+        }
+        if (!text) continue;
+        swipe = { ...swipe, content: swipe.content + text };
         const cut = backstopCut(swipe.content, chat.length, startOffset);
         if (cut >= 0) {
           swipe = { ...swipe, content: swipe.content.slice(0, cut).trimEnd() };
@@ -387,7 +406,7 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
   };
 
   try {
-    if (cont) {
+    if (cont && !contByAsking) {
       // vLLM-style servers (Featherless) continue a trailing assistant message with these flags.
       // Servers that reject them get a plain request, which still adds on to the reply.
       try {
@@ -412,6 +431,13 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
     await repo.put('messages', target);
     await updateChat({}, chat.id);
   }
+}
+
+const CONTINUE_ASK = '[Continue your last reply exactly where it stopped, mid-sentence if needed. Output only the new text: do not repeat anything already written and do not comment.]';
+
+/** Whether this model will think on this chat's settings. */
+export function thinksFor(chat: Chat, m?: ModelEntry): boolean {
+  return !!m?.thinking && !(m.thinking === 'optional' && chat.thinking === 'off');
 }
 
 /** Continues a reply that stopped at the token limit. */

@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import type { Part } from '../context/build';
 import { buildFor, contextLimitFor, currentChat, replyReserve, sendMaxTokens, ui, useStore } from '../store/store';
 
-const ROLE_LABEL = { system: 'System', user: 'User', assistant: 'Assistant' } as const;
+// How each message is sent. The legend and chips name the content; this names the role.
+const ROLE_LABEL = { system: 'sent as system instructions', user: 'sent as your turn', assistant: 'sent as the AI\'s turn' } as const;
 
 function PartView({ p }: { p: Part }) {
   const [open, setOpen] = useState(false);
@@ -56,7 +57,7 @@ export function ContextModal() {
               {ctx.totals.map((t) => (
                 <tr key={t.source}>
                   <td><span className={`cx-swatch src-${t.source}`} /></td>
-                  <td>{t.label}{t.count > 1 ? ` (${t.count})` : ''}</td>
+                  <td>{t.label}{t.count > 1 ? ` × ${t.count}` : ''}</td>
                   <td className="num">~{t.tokens.toLocaleString()}</td>
                 </tr>
               ))}
@@ -93,14 +94,14 @@ export function ContextModal() {
           {ctx.annotated.map((m, i) => (
             <div key={i} className={`cx-msg role-${m.role}`}>
               <div className="cx-msg-head">
-                <b>{i + 1}. {ROLE_LABEL[m.role]}</b>
-                <span className="muted tiny">{m.parts.map((p) => p.label).join(' + ')}</span>
+                <b>Message {i + 1}</b>
+                <span className="muted tiny">{ROLE_LABEL[m.role]}</span>
               </div>
               {m.parts.map((p, j) => <PartView key={j} p={p} />)}
             </div>
           ))}
           <p className="muted small">
-            Some models (DeepSeek, for one) move every System message to the very top of the prompt, whatever its
+            Some models (DeepSeek, for one) move every message sent as system instructions to the very top of the prompt, whatever its
             position here. That is why the Author's Note and Length go inside your message by default.
           </p>
         </div>
