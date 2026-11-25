@@ -1,9 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
-import { importEntries, parseLorebook, sameName, tidyEntries, type DuplicateMode, type ParsedLorebook } from '../../features/lorebook';
+import { importEntries, NotALorebook, parseLorebook, sameName, tidyEntries, type DuplicateMode, type ParsedLorebook } from '../../features/lorebook';
+import { readSource, startExtract } from '../../features/extract';
+import { ExtractResults } from './ExtractResults';
 import { ui, useStore } from '../../store/store';
 import type { Chat, CodexEntry } from '../../types';
 
-/** Codex → Import: read a NovelAI or SillyTavern lorebook, pick entries, import. No AI involved. */
+/** Codex → Import lorebook: either read a NovelAI / SillyTavern file directly (no AI), or have the Helper
+ * model extract entries from any file or pasted text. */
 export function LorebookImport({ chat }: { chat: Chat }) {
   const books = useStore((s) => s.codex);
   const file = useRef<HTMLInputElement>(null);
@@ -13,6 +16,10 @@ export function LorebookImport({ chat }: { chat: Chat }) {
   const [bookName, setBookName] = useState('');
   const [dupes, setDupes] = useState<DuplicateMode>('skip');
   const [error, setError] = useState('');
+  const [choosing, setChoosing] = useState(false);
+  const [paste, setPaste] = useState('');
+  const [failed, setFailed] = useState<File>();
+  const anyFile = useRef<HTMLInputElement>(null);
   const [done, setDone] = useState<{ text: string; entries: CodexEntry[] }>();
   const [tidy, setTidy] = useState<{ note: string; running: boolean }>();
   const stopTidy = useRef<AbortController>(undefined);
@@ -32,6 +39,7 @@ export function LorebookImport({ chat }: { chat: Chat }) {
     setError('');
     setDone(undefined);
     setTidy(undefined);
+    setFailed(undefined);
     try {
       const p = parseLorebook(await f.text());
       if (!p.entries.length) throw new Error('This lorebook has no entries.');
@@ -42,8 +50,25 @@ export function LorebookImport({ chat }: { chat: Chat }) {
     } catch (e) {
       setParsed(undefined);
       setError((e as Error).message);
+      if (e instanceof NotALorebook) setFailed(f);
     }
+    setChoosing(false);
     if (file.current) file.current.value = '';
+  };
+
+  const extract = async (source: string, text: Promise<string> | string) => {
+    setError('');
+    setFailed(undefined);
+    try {
+      const t = (await text).trim();
+      if (!t) throw new Error('There is no text in that to read.');
+      setChoosing(false);
+      setPaste('');
+      void startExtract(chat.id, source, t);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    if (anyFile.current) anyFile.current.value = '';
   };
 
   const toggle = (ids: string[], on: boolean) => {
@@ -76,10 +101,33 @@ export function LorebookImport({ chat }: { chat: Chat }) {
   return (
     <section className="lore-import">
       <div className="row">
-        <button className="small" onClick={() => file.current?.click()} title="NovelAI .lorebook or .scenario, SillyTavern world info, or a character card's lorebook (JSON)">Import lorebook…</button>
+        <button className="small" onClick={() => setChoosing(!choosing)} aria-expanded={choosing}>Import lorebook…</button>
         <input ref={file} type="file" accept=".lorebook,.scenario,.json,application/json" hidden onChange={(e) => void open(e.target.files?.[0])} />
+        <input ref={anyFile} type="file" accept=".txt,.md,.json,.html,.htm,.docx,.epub,.lorebook,text/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void extract(f.name, readSource(f)); }} />
       </div>
-      {error && <p className="error small">{error}</p>}
+      {choosing && (
+        <div className="lore-choose">
+          <div className="card">
+            <b>NovelAI / SillyTavern file</b>
+            <p className="muted small">A .lorebook, .scenario, world info or character card. Read straight in, no AI, so it's instant.</p>
+            <button className="small" onClick={() => file.current?.click()}>Choose file…</button>
+          </div>
+          <div className="card">
+            <b>Extract from any file or text</b>
+            <p className="muted small">A past story, notes, or another app's export (txt, md, json, html, docx, epub). The Helper reads it in parts, about a minute each, and lists entries to add.</p>
+            <button className="small" onClick={() => anyFile.current?.click()}>Choose file…</button>
+            <textarea rows={3} placeholder="…or paste text here" value={paste} onChange={(e) => setPaste(e.target.value)} />
+            {paste.trim() && <button className="small" onClick={() => void extract('Pasted text', paste)}>Extract</button>}
+          </div>
+        </div>
+      )}
+      {error && (
+        <p className="error small">
+          {error}{' '}
+          {failed && <button className="small" onClick={() => void extract(failed.name, readSource(failed))}>Extract entries from it with Helper instead</button>}
+        </p>
+      )}
+      <ExtractResults chat={chat} />
 
       {parsed && (
         <div className="card">

@@ -61,3 +61,29 @@ export function zip(files: { name: string; data: string | Uint8Array }[]): Uint8
   }
   return out;
 }
+
+/** Reads a ZIP (for .docx and .epub imports): file names in archive order, with their bytes. */
+export async function unzip(buf: ArrayBuffer): Promise<Map<string, Uint8Array>> {
+  const v = new DataView(buf);
+  let eocd = -1;
+  for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 65557); i--) if (v.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("This file isn't a readable .docx or .epub.");
+  const count = v.getUint16(eocd + 10, true);
+  let p = v.getUint32(eocd + 16, true);
+  const out = new Map<string, Uint8Array>();
+  const dec = new TextDecoder();
+  for (let n = 0; n < count; n++) {
+    const method = v.getUint16(p + 10, true);
+    const size = v.getUint32(p + 20, true);
+    const nameLen = v.getUint16(p + 28, true);
+    const skip = nameLen + v.getUint16(p + 30, true) + v.getUint16(p + 32, true);
+    const local = v.getUint32(p + 42, true);
+    const name = dec.decode(new Uint8Array(buf, p + 46, nameLen));
+    p += 46 + skip;
+    const start = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
+    const raw = new Uint8Array(buf, start, size);
+    if (method === 0) out.set(name, raw);
+    else if (method === 8) out.set(name, new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()));
+  }
+  return out;
+}

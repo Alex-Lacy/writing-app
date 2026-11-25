@@ -56,6 +56,11 @@ http.createServer(async (req, res) => {
     if (String(last.content).startsWith('# Lookup results')) return reply('From the wiki, Yennefer is a sorceress from Vengerberg.\n```changes\n[{"type":"codex-add","name":"Yennefer","keys":["Yennefer"],"text":"A sorceress from Vengerberg."}]\n```');
     return reply('Checking the wiki.\n```lookup\n[{"tool":"search","wiki":"witcher","query":"Yennefer"},{"tool":"read","wiki":"witcher","page":"Yennefer of Vengerberg"}]\n```');
   }
+  if (sys.includes('You build Codex entries')) {
+    const part = String(last.content);
+    const known = { Mara: ['character', 'A detective with a scar.'], Rell: ['character', 'A smuggler who owes Mara money.'], Harrowgate: ['place', 'A rain-soaked port city.'] };
+    return reply(JSON.stringify(Object.entries(known).filter(([n]) => part.split('# Part')[1]?.includes(n)).map(([name, [category, text]]) => ({ name, category, keys: [name], text }))));
+  }
   if (sys.includes('You tidy Codex entries')) {
     const first = String(last.content).match(/^## (.+)$/m)?.[1];
     return reply(first ? JSON.stringify([{ type: 'codex-edit', entry: first, text: `${first}, tidied.`, keys: [first], reason: 'removed leftover brackets' }]) : '[]');

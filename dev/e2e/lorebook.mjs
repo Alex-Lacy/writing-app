@@ -29,7 +29,7 @@ await p.locator('.remote-row button').nth(0).click();
 await p.locator('.modal-head .icon').click();
 await p.getByRole('button', { name: '+ New story' }).click();
 await p.locator('.panel-tabs button:has-text("Codex")').click();
-await p.locator('.lore-import input[type=file]').setInputFiles(file);
+await p.locator('.lore-import input[type=file]').nth(0).setInputFiles(file);
 await p.waitForSelector('.lore-entry');
 console.log('preview:', await p.locator('.lore-entry').count(), 'entries; ticked:', await p.locator('.lore-entry input:checked').count());
 await p.locator('.lore-import').screenshot({ path: '/tmp/lore-preview.png' });
@@ -37,7 +37,7 @@ await p.getByRole('button', { name: /Import 2 entries/ }).click();
 await p.waitForSelector('text=Imported: 2 added');
 console.log('codex entries:', await p.locator('.cx-entry').count());
 // Import again: both are duplicates now.
-await p.locator('.lore-import input[type=file]').setInputFiles(file);
+await p.locator('.lore-import input[type=file]').nth(0).setInputFiles(file);
 await p.waitForSelector('.tag-dupe');
 console.log('dupes flagged:', await p.locator('.tag-dupe').count());
 await p.getByRole('button', { name: /Import 2 entries/ }).click();
@@ -45,7 +45,7 @@ await p.waitForSelector('text=2 skipped as duplicates');
 console.log('codex entries after re-import (skip):', await p.locator('.cx-entry').count());
 await p.getByRole('button', { name: 'Close' }).click();
 // Fresh import then tidy.
-await p.locator('.lore-import input[type=file]').setInputFiles(file);
+await p.locator('.lore-import input[type=file]').nth(0).setInputFiles(file);
 await p.locator('.lore-entry input').nth(2).check();
 await p.locator('.lore-import select').nth(1).selectOption('replace');
 await p.getByRole('button', { name: /Import 3 entries/ }).click();

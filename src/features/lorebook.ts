@@ -18,7 +18,7 @@ export interface ImportedEntry {
 }
 
 export interface ParsedLorebook {
-  format: 'NovelAI' | 'SillyTavern' | 'Character card';
+  format: 'NovelAI' | 'SillyTavern' | 'Character card' | 'Lorebook';
   entries: ImportedEntry[];
 }
 
@@ -26,24 +26,63 @@ type Obj = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim()) : []);
 
-/** Reads a lorebook file's JSON. Throws a plain-language error for anything it doesn't recognise. */
+/** A file the direct importer can't read. The panel offers to extract entries from it instead. */
+export class NotALorebook extends Error {}
+
+/** Reads a lorebook file's JSON. Throws NotALorebook for anything it can't find entries in. */
 export function parseLorebook(raw: string): ParsedLorebook {
   let j: Obj;
   try {
     j = JSON.parse(raw) as Obj;
   } catch {
-    throw new Error("This file isn't JSON. NovelAI lorebooks are .lorebook files; image (.png) lorebooks aren't supported yet.");
+    throw new NotALorebook("This file isn't JSON, so it can't be read as a lorebook. Image (.png) cards aren't supported.");
   }
+  const found = known(j);
+  if (found?.entries.some((x) => x.entry.text)) return found;
+  const any = anyShape(j);
+  if (any.length) return { format: 'Lorebook', entries: any };
+  throw new NotALorebook("Couldn't find lorebook entries in this file.");
+}
+
+function known(root: Obj): ParsedLorebook | undefined {
+  if (!root || typeof root !== 'object' || Array.isArray(root)) return;
+  let j = root;
   // A NovelAI scenario carries its lorebook inside.
   if (j.lorebook && typeof j.lorebook === 'object') j = j.lorebook as Obj;
   // A character card (V2/V3) carries a character_book.
   const card = ((j.data as Obj | undefined)?.character_book ?? j.character_book) as Obj | undefined;
   if (card) return { format: 'Character card', entries: fromCardBook(card) };
-
   if (Array.isArray(j.entries) && ('lorebookVersion' in j || j.entries.some((e) => (e as Obj)?.displayName !== undefined))) return { format: 'NovelAI', entries: fromNai(j) };
   if (Array.isArray(j.entries)) return { format: 'Character card', entries: fromCardBook(j) };
   if (j.entries && typeof j.entries === 'object') return { format: 'SillyTavern', entries: fromTavern(j.entries as Obj) };
-  throw new Error("Couldn't find any lorebook entries in this file.");
+}
+
+const pick = (o: Obj, names: string[]) => names.map((n) => o[n]).find((v) => (typeof v === 'string' && v.trim()) || (Array.isArray(v) && v.length));
+const TEXT = ['content', 'text', 'entry', 'description', 'value', 'body', 'prompt', 'info'];
+const NAME = ['name', 'displayName', 'title', 'comment', 'label', 'key'];
+const KEYS = ['keys', 'key', 'keywords', 'triggers', 'activationKeys', 'aliases', 'tags', 'secondary_keys'];
+const asKeys = (v: unknown) => (typeof v === 'string' ? v.split(',').map((x) => x.trim()).filter(Boolean) : strs(v));
+
+/** Any other lorebook-like JSON: the largest list (or map) of objects that carry some text. */
+function anyShape(root: unknown): ImportedEntry[] {
+  let best: Obj[] = [];
+  const visit = (v: unknown, depth: number) => {
+    if (!v || typeof v !== 'object' || depth > 5) return;
+    const items = (Array.isArray(v) ? v : Object.values(v)).filter((x): x is Obj => !!x && typeof x === 'object' && !Array.isArray(x));
+    const withText = items.filter((x) => typeof pick(x, TEXT) === 'string');
+    if (withText.length > best.length) best = withText;
+    for (const x of Array.isArray(v) ? v : Object.values(v)) visit(x, depth + 1);
+  };
+  visit(root, 0);
+  return best.map((e) => {
+    const keys = asKeys(pick(e, KEYS));
+    const name = pick(e, NAME);
+    return {
+      entry: newEntry({ name: (typeof name === 'string' ? name.trim() : '') || keys[0] || 'Untitled', keys, text: String(pick(e, TEXT)).trim(), alwaysOn: e.constant === true || e.alwaysOn === true || undefined }),
+      category: str(e.category) || str(e.group) || 'Entries',
+      off: e.enabled === false || e.disable === true || e.disabled === true,
+    };
+  });
 }
 
 function fromNai(j: Obj): ImportedEntry[] {

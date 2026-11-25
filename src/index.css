@@ -368,3 +368,13 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .sync-item.conflict { display: block; border-color: var(--accent); }
 .sync-step { font-size: 12px; white-space: nowrap; color: var(--accent); min-width: 96px; }
 .scanner { width: 100%; max-height: 240px; border-radius: 8px; background: #000; }
+.lore-choose { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.lore-choose .card { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin: 0; }
+.lore-choose textarea { width: 100%; }
+@media (max-width: 640px) { .lore-choose { grid-template-columns: 1fr; } }
+.extract .meter-bar { display: block; width: 100%; margin: 4px 0; }
+.extract-row { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.extract-row:last-child { border-bottom: none; }
+.extract-row details { flex: 1; min-width: 0; }
+.extract-row summary { cursor: pointer; }
+.extract-row .pre { white-space: pre-wrap; }
