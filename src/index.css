@@ -378,3 +378,6 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .extract-row details { flex: 1; min-width: 0; }
 .extract-row summary { cursor: pointer; }
 .extract-row .pre { white-space: pre-wrap; }
+.lore-modal { width: min(820px, 96vw); }
+.lore-modal .lore-list { max-height: 55vh; }
+@media (max-width: 860px) { .lore-modal { width: 100vw; max-height: 100dvh; border-radius: 0; } }

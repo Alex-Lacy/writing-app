@@ -32,7 +32,7 @@ await p.locator('.panel-tabs button:has-text("Codex")').click();
 await p.locator('.lore-import input[type=file]').nth(0).setInputFiles(file);
 await p.waitForSelector('.lore-entry');
 console.log('preview:', await p.locator('.lore-entry').count(), 'entries; ticked:', await p.locator('.lore-entry input:checked').count());
-await p.locator('.lore-import').screenshot({ path: '/tmp/lore-preview.png' });
+await p.screenshot({ path: '/tmp/lore-preview.png' });
 await p.getByRole('button', { name: /Import 2 entries/ }).click();
 await p.waitForSelector('text=Imported: 2 added');
 console.log('codex entries:', await p.locator('.cx-entry').count());

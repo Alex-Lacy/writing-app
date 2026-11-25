@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { importEntries, NotALorebook, parseLorebook, sameName, tidyEntries, type DuplicateMode, type ParsedLorebook } from '../../features/lorebook';
-import { readSource, startExtract } from '../../features/extract';
+import { readSource, startExtract, useExtract } from '../../features/extract';
 import { ExtractResults } from './ExtractResults';
 import { ui, useStore } from '../../store/store';
 import type { Chat, CodexEntry } from '../../types';
@@ -16,7 +16,8 @@ export function LorebookImport({ chat }: { chat: Chat }) {
   const [bookName, setBookName] = useState('');
   const [dupes, setDupes] = useState<DuplicateMode>('skip');
   const [error, setError] = useState('');
-  const [choosing, setChoosing] = useState(false);
+  const [show, setShow] = useState(false);
+  const extractRun = useExtract((x) => x.run);
   const [paste, setPaste] = useState('');
   const [failed, setFailed] = useState<File>();
   const anyFile = useRef<HTMLInputElement>(null);
@@ -36,6 +37,7 @@ export function LorebookImport({ chat }: { chat: Chat }) {
 
   const open = async (f?: File) => {
     if (!f) return;
+    setShow(true);
     setError('');
     setDone(undefined);
     setTidy(undefined);
@@ -52,7 +54,6 @@ export function LorebookImport({ chat }: { chat: Chat }) {
       setError((e as Error).message);
       if (e instanceof NotALorebook) setFailed(f);
     }
-    setChoosing(false);
     if (file.current) file.current.value = '';
   };
 
@@ -62,8 +63,8 @@ export function LorebookImport({ chat }: { chat: Chat }) {
     try {
       const t = (await text).trim();
       if (!t) throw new Error('There is no text in that to read.');
-      setChoosing(false);
-      setPaste('');
+        setPaste('');
+      setShow(true);
       void startExtract(chat.id, source, t);
     } catch (e) {
       setError((e as Error).message);
@@ -101,11 +102,25 @@ export function LorebookImport({ chat }: { chat: Chat }) {
   return (
     <section className="lore-import">
       <div className="row">
-        <button className="small" onClick={() => setChoosing(!choosing)} aria-expanded={choosing}>Import lorebook…</button>
-        <input ref={file} type="file" accept=".lorebook,.scenario,.json,application/json" hidden onChange={(e) => void open(e.target.files?.[0])} />
-        <input ref={anyFile} type="file" accept=".txt,.md,.json,.html,.htm,.docx,.epub,.lorebook,text/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void extract(f.name, readSource(f)); }} />
+        <button className="small" onClick={() => setShow(true)}>Import lorebook…</button>
+        {!show && extractRun?.chatId === chat.id && (
+          <span className="muted small">
+            {extractRun.running ? <><span className="spinner" /> Extracting from {extractRun.source}…</> : `${extractRun.found.length} found in ${extractRun.source}`}{' '}
+            <button className="small ghost" onClick={() => setShow(true)}>Open</button>
+          </span>
+        )}
       </div>
-      {choosing && (
+      <input ref={file} type="file" accept=".lorebook,.scenario,.json,application/json" hidden onChange={(e) => void open(e.target.files?.[0])} />
+      <input ref={anyFile} type="file" accept=".txt,.md,.json,.html,.htm,.docx,.epub,.lorebook,text/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void extract(f.name, readSource(f)); }} />
+      {show && (
+        <div className="modal-scrim" onClick={() => setShow(false)}>
+          <div className="modal lore-modal" onClick={(e) => e.stopPropagation()}>
+            <header className="modal-head">
+              <h2>Import lorebook</h2>
+              <button className="icon" onClick={() => setShow(false)}>✕</button>
+            </header>
+            <div className="modal-body lore-import">
+      {!parsed && !done && extractRun?.chatId !== chat.id && (
         <div className="lore-choose">
           <div className="card">
             <b>NovelAI / SillyTavern file</b>
@@ -198,6 +213,10 @@ export function LorebookImport({ chat }: { chat: Chat }) {
               {tidy && <p className="muted small">{tidy.running && <span className="spinner" />} {tidy.note}</p>}
             </>
           )}
+        </div>
+      )}
+            </div>
+          </div>
         </div>
       )}
     </section>

@@ -29,14 +29,13 @@ const fileIn = p.locator('.lore-import input[type=file]');
 
 // 1. An odd JSON shape goes straight in.
 await p.getByRole('button', { name: 'Import lorebook…' }).click();
-await p.locator('.lore-import').screenshot({ path: '/tmp/extract-choose.png' });
+await p.screenshot({ path: '/tmp/extract-choose.png' });
 await fileIn.nth(0).setInputFiles(odd);
 await p.waitForSelector('.lore-entry');
 console.log('odd json:', await p.locator('.lore-import .card p').first().innerText());
 await p.getByRole('button', { name: 'Cancel' }).click();
 
 // 2. A JSON with no entries offers extraction instead.
-await p.getByRole('button', { name: 'Import lorebook…' }).click();
 await fileIn.nth(0).setInputFiles(bad);
 await p.getByRole('button', { name: 'Extract entries from it with Helper instead' }).click();
 await p.waitForSelector('.extract-row', { timeout: 20000 });
@@ -45,13 +44,12 @@ console.log('hand-off found:', await p.locator('.extract-row summary b').allInne
 await p.locator('.extract').getByRole('button', { name: 'Close' }).click();
 
 // 3. A long story: several parts, merged, then Add one and Add all.
-await p.getByRole('button', { name: 'Import lorebook…' }).click();
 await fileIn.nth(1).setInputFiles(story);
 await p.waitForSelector('.extract .meter-bar');
 await p.waitForSelector('.extract >> text=Close', { timeout: 30000 });
 console.log('story:', await p.locator('.extract > p').first().innerText(), '·', await p.locator('.extract-row summary b').allInnerTexts());
 await p.locator('.extract-row').first().locator('summary').click();
-await p.locator('.extract').screenshot({ path: '/tmp/extract-results.png' });
+await p.screenshot({ path: '/tmp/extract-results.png' });
 await p.locator('.extract-row').first().getByRole('button', { name: 'Add' }).click();
 await p.waitForSelector('text=Added ✓');
 await p.getByRole('button', { name: /Add all 2/ }).click();
@@ -60,7 +58,6 @@ console.log('codex entries:', await p.locator('.cx-entry').count());
 
 // 4. Again: now everything matches existing entries.
 await p.locator('.extract').getByRole('button', { name: 'Close' }).click();
-await p.getByRole('button', { name: 'Import lorebook…' }).click();
 await p.locator('.lore-choose textarea').fill('Mara and Rell argued in Harrowgate.');
 await p.getByRole('button', { name: 'Extract', exact: true }).click();
 await p.waitForSelector('.extract >> text=Close', { timeout: 20000 });
