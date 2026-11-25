@@ -50,6 +50,8 @@ export interface BuildInput {
   contextLimit: number;
   maxTokens: number;
   safetyMargin: number;
+  /** Continue mode: the last history item is a reply the server will keep writing, so it must stay last. */
+  continueLast?: boolean;
 }
 
 export interface Part {
@@ -222,13 +224,17 @@ export function buildContext(input: BuildInput): BuildResult {
   // Tail blocks: end of the latest user message, or a new user message after a reply.
   if (tailBlocks.length || lateParts.length) {
     const parts = [...lateParts, ...tailBlocks.map((b) => mkPart(sourceOf(b), labelOf(b), b.text))];
-    const last = body.at(-1);
-    if (last?.role === 'user') {
-      let slot = last;
+    const keepLast = !!input.continueLast && body.at(-1)?.role === 'assistant';
+    // When continuing, the notes go with the user message before the reply being continued.
+    const end = keepLast ? body.length - 1 : body.length;
+    let at = end - 1;
+    if (keepLast) while (at >= 0 && body[at].role !== 'user') at--;
+    if (at >= 0 && body[at].role === 'user') {
+      let slot = body[at];
       for (const part of parts) slot = append(slot, part);
-      body = [...body.slice(0, -1), slot];
+      body = [...body.slice(0, at), slot, ...body.slice(at + 1)];
     } else {
-      body.push({ role: 'user', content: parts.map((p) => p.text).join('\n\n'), parts });
+      body.splice(end, 0, { role: 'user', content: parts.map((p) => p.text).join('\n\n'), parts });
     }
   }
 

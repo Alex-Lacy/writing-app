@@ -1,4 +1,4 @@
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import { openDB, type DBSchema, type IDBPDatabase, type IDBPTransaction, type StoreNames } from 'idb';
 import type { AppSettings, Chat, Message, ModelEntry, Preset, ProviderConfig } from '../types';
 
 // All data lives in IndexedDB on the device. Phase 3 sync will layer on top of this
@@ -24,19 +24,40 @@ export interface BackupData {
   messages?: Message[];
 }
 
+type UpgradeDB = IDBPDatabase<StudioDB>;
+type UpgradeTx = IDBPTransaction<StudioDB, StoreNames<StudioDB>[], 'versionchange'>;
+export type Migration = (d: UpgradeDB, tx: UpgradeTx) => void;
+
+/**
+ * One step per database version, run in order from the installed version up. Never edit a
+ * step once released; add a new one and the version follows. Step 0 makes version 1.
+ * Phase 2 example: `(d) => { d.createObjectStore('lorebooks', { keyPath: 'id' }); }`.
+ */
+export const MIGRATIONS: Migration[] = [
+  (d) => {
+    d.createObjectStore('kv');
+    d.createObjectStore('providers', { keyPath: 'id' });
+    d.createObjectStore('models', { keyPath: 'key' });
+    d.createObjectStore('presets', { keyPath: 'id' });
+    d.createObjectStore('chats', { keyPath: 'id' }).createIndex('byUpdated', 'updatedAt');
+    d.createObjectStore('messages', { keyPath: 'id' }).createIndex('byChat', 'chatId');
+  },
+];
+export const DB_VERSION = MIGRATIONS.length;
+
+/** Opens (and upgrades) a database. `steps` is only overridden by tests. */
+export function openStudioDB(name = 'writing-studio', steps: Migration[] = MIGRATIONS) {
+  return openDB<StudioDB>(name, steps.length, {
+    upgrade(d, oldVersion, _newVersion, tx) {
+      for (let v = oldVersion; v < steps.length; v++) steps[v](d, tx);
+    },
+  });
+}
+
 let dbp: Promise<IDBPDatabase<StudioDB>> | null = null;
 
 export function db() {
-  dbp ??= openDB<StudioDB>('writing-studio', 1, {
-    upgrade(d) {
-      d.createObjectStore('kv');
-      d.createObjectStore('providers', { keyPath: 'id' });
-      d.createObjectStore('models', { keyPath: 'key' });
-      d.createObjectStore('presets', { keyPath: 'id' });
-      d.createObjectStore('chats', { keyPath: 'id' }).createIndex('byUpdated', 'updatedAt');
-      d.createObjectStore('messages', { keyPath: 'id' }).createIndex('byChat', 'chatId');
-    },
-  });
+  dbp ??= openStudioDB();
   return dbp;
 }
 

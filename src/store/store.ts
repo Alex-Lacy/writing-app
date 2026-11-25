@@ -32,6 +32,9 @@ interface State {
 }
 
 let abort: AbortController | null = null;
+let streamingChatId: string | undefined;
+/** How often a streaming reply is written to storage, so a killed app keeps most of it. */
+export const SAVE_EVERY_MS = 2000;
 
 export const useStore = create<State>()(() => ({
   ready: false,
@@ -102,7 +105,7 @@ async function doInit() {
   s.activeProviderId ??= provs[0].id;
   set({ ready: true, settings: s, providers: provs, models, presets, chats: sortChats(allChats), settingsOpen: !provs.some((p) => p.apiKey) });
   const first = sortChats(allChats)[0];
-  if (first) await selectChat(first.id);
+  if (first) await selectChat(first.id, true);
 }
 
 export async function saveSettings(patch: Partial<AppSettings>) {
@@ -160,7 +163,12 @@ export async function newChat(): Promise<Chat> {
   return chat;
 }
 
-export async function selectChat(id: string) {
+export async function selectChat(id: string, reload = false) {
+  // Tapping the chat you're already in just closes the sidebar; it must not stop a reply.
+  if (id === get().currentChatId && !reload) {
+    set({ sidebarOpen: false });
+    return;
+  }
   if (get().streamingId) stop();
   const messages = await repo.messages(id);
   set({ currentChatId: id, messages, sidebarOpen: false, error: undefined, lastContext: undefined });
@@ -185,9 +193,11 @@ export async function duplicateChat(id: string) {
 }
 
 export async function deleteChat(id: string) {
-  await repo.deleteChat(id);
+  // Drop it from state first: a reply still streaming checks this and skips its saves.
   const chats = get().chats.filter((c) => c.id !== id);
   set({ chats });
+  if (streamingChatId === id) stop();
+  await repo.deleteChat(id);
   if (get().currentChatId === id) {
     if (chats[0]) await selectChat(chats[0].id);
     else set({ currentChatId: undefined, messages: [] });
@@ -224,7 +234,7 @@ function historyItems(msgs: Message[]): HistoryItem[] {
 }
 
 /** Builds the exact request for the history before `uptoIndex` (exclusive). Used by generation and the context viewer. */
-export function buildFor(chat: Chat, msgs: Message[]): BuildResult {
+export function buildFor(chat: Chat, msgs: Message[], opts: { continueLast?: boolean } = {}): BuildResult {
   const s = get();
   return buildContext({
     systemPrompt: chat.systemPrompt,
@@ -237,6 +247,7 @@ export function buildFor(chat: Chat, msgs: Message[]): BuildResult {
     contextLimit: contextLimitFor(chat, s),
     maxTokens: replyReserve(chat, s),
     safetyMargin: s.settings.safetyMargin,
+    continueLast: opts.continueLast,
   });
 }
 
@@ -325,10 +336,11 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
     target = { ...target, swipes: [{ content: '', createdAt: Date.now(), modelKey: model.key }] };
   }
 
-  const ctx = buildFor(chat, history);
   // Thinking models can't pick up a half-written reply (the server would put a fresh think
-  // block in front of it), so for them Continue asks in words instead.
+  // block in front of it), so for them Continue asks in words instead. Otherwise the reply
+  // being continued must be the very last message.
   const contByAsking = !!cont && thinksFor(chat, model);
+  const ctx = buildFor(chat, history, { continueLast: !!cont && !contByAsking });
   if (contByAsking) {
     const last = ctx.messages.at(-1);
     if (last?.role === 'user' && typeof last.content === 'string') last.content += '\n\n' + CONTINUE_ASK;
@@ -340,6 +352,13 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
   }
   const params = { ...chat.params, maxTokens: sendMaxTokens(chat, ctx) };
   set({ lastContext: ctx, streamingId: target.id, error: undefined });
+  streamingChatId = chat.id;
+  const chatExists = () => get().chats.some((c) => c.id === chat.id);
+  let lastSave = performance.now();
+  const save = async () => {
+    lastSave = performance.now();
+    if (chatExists()) await repo.put('messages', target);
+  };
   abort = new AbortController();
 
   const si = target.activeSwipe;
@@ -352,6 +371,7 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
     const t = { ...target, swipes: target.swipes.map((s, i) => (i === si ? swipe : s)) };
     target = t;
     set({ messages: get().messages.map((x) => (x.id === t.id ? t : x)) });
+    if (now - lastSave >= SAVE_EVERY_MS) void save().catch(() => {});
   };
 
   const thinkExtra = thinkingExtra(chat, model);
@@ -427,8 +447,9 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
     if (softStopped) swipe = { ...swipe, finishReason: 'length-soft', error: undefined };
     paint(true);
     abort = null;
+    streamingChatId = undefined;
     set({ streamingId: undefined });
-    await repo.put('messages', target);
+    await save();
     await updateChat({}, chat.id);
   }
 }

@@ -96,3 +96,33 @@ describe('inline notes never go into AI replies', () => {
     expect(r.messages[2].content).toBe("[Author's Note: AN]");
   });
 });
+
+describe('buildContext in Continue mode', () => {
+  const blocks = [
+    ...writingBlocks({ ...DEFAULT_WRITING, enabled: true, authorsNote: 'AN', anDepth: 1, anRole: 'inline' }),
+    { id: 'length', label: 'Length', source: 'length' as const, text: '[Length: one scene]', placement: { kind: 'tail' as const } },
+  ];
+  const history: HistoryItem[] = [
+    { id: 'u', role: 'user', content: 'Write it.' },
+    { id: 'a', role: 'assistant', content: 'Half a reply' },
+  ];
+
+  it('keeps the reply being continued as the last message', () => {
+    const r = buildContext({ systemPrompt: '', blocks, history, contextLimit: 32768, maxTokens: 512, safetyMargin: 0, continueLast: true });
+    expect(r.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+    expect(r.messages[1].content).toBe('Half a reply');
+    expect(r.messages[0].content).toContain('AN');
+    expect(r.messages[0].content).toContain('[Length: one scene]');
+  });
+
+  it('adds a user message before the reply when there is no earlier one', () => {
+    const r = buildContext({ systemPrompt: '', blocks, history: [history[1]], contextLimit: 32768, maxTokens: 512, safetyMargin: 0, continueLast: true });
+    expect(r.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+    expect(r.messages.at(-1)!.content).toBe('Half a reply');
+  });
+
+  it('without Continue, notes after a reply still go in a new user message', () => {
+    const r = buildContext({ systemPrompt: '', blocks, history, contextLimit: 32768, maxTokens: 512, safetyMargin: 0 });
+    expect(r.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+  });
+});
