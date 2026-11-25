@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import qrcode from 'qrcode-generator';
-import { cleanCode, connect, newCode, SIGNAL_DEFAULT, type Link } from '../sync/link';
+import { cleanCode, connect, newCode, shareLocalAddress, SIGNAL_DEFAULT, type ConnectError, type Link } from '../sync/link';
 import { guestServe, hostApply, hostCancel, hostReview, lastSnapshotAt, undoLastSync, type Choice } from '../sync/session';
 import { saveSettings, ui, useStore } from '../store/store';
 
@@ -12,7 +12,7 @@ type Stage =
   | { k: 'review'; r: Review }
   | { k: 'applying' }
   | { k: 'done'; summary: string }
-  | { k: 'error'; message: string };
+  | { k: 'error'; message: string; details?: string; noLocal?: boolean };
 
 /** The code in a pairing link (the QR code opens the app with #pair=CODE). */
 const pairFromUrl = () => location.hash.match(/pair=([A-Z0-9-]+)/i)?.[1];
@@ -20,6 +20,8 @@ const pairFromUrl = () => location.hash.match(/pair=([A-Z0-9-]+)/i)?.[1];
 /** Sync with your other device: one shows a code, the other scans or types it. */
 export function SyncModal() {
   const relay = useStore((s) => s.settings.syncRelay ?? '');
+  const turn = useStore((s) => s.settings.syncTurn);
+  const [shared, setShared] = useState('');
   const current = useStore((s) => s.currentChatId);
   const [stage, setStage] = useState<Stage>({ k: 'start' });
   const [typed, setTyped] = useState('');
@@ -32,7 +34,7 @@ export function SyncModal() {
 
   const fail = useCallback((e: unknown) => {
     if ((e as Error).name === 'AbortError') return;
-    setStage({ k: 'error', message: (e as Error).message });
+    setStage({ k: 'error', message: (e as Error).message, details: (e as ConnectError).details, noLocal: (e as ConnectError).noLocal });
   }, []);
 
   const host = async () => {
@@ -40,7 +42,7 @@ export function SyncModal() {
     abort.current = new AbortController();
     setStage({ k: 'host', code, status: 'Getting ready…' });
     try {
-      link.current = await connect(code, 'host', { relay, signal: abort.current.signal, onStatus: (status) => setStage({ k: 'host', code, status }) });
+      link.current = await connect(code, 'host', { relay, turn, signal: abort.current.signal, onStatus: (status) => setStage({ k: 'host', code, status }) });
       setStage({ k: 'host', code, status: 'Connected. Comparing stories…' });
       const r = await hostReview(link.current);
       setChoices({});
@@ -55,13 +57,13 @@ export function SyncModal() {
     abort.current = new AbortController();
     setStage({ k: 'guest', status: 'Looking for the other device…' });
     try {
-      link.current = await connect(code, 'guest', { relay, signal: abort.current.signal, onStatus: (status) => setStage({ k: 'guest', status }) });
+      link.current = await connect(code, 'guest', { relay, turn, signal: abort.current.signal, onStatus: (status) => setStage({ k: 'guest', status }) });
       const summary = await guestServe(link.current, (status) => setStage({ k: 'guest', status }));
       setStage({ k: 'done', summary });
     } catch (e) {
       fail(e);
     }
-  }, [relay, fail]);
+  }, [relay, turn, fail]);
 
   // Opened from a scanned pairing link: join straight away (once).
   const autoJoin = useRef(pairFromUrl());
@@ -136,6 +138,12 @@ export function SyncModal() {
                 <summary>Advanced: pairing relay</summary>
                 <p>The two devices find each other through a free public relay ({SIGNAL_DEFAULT}). It only ever carries an encrypted connection note. You can use your own ntfy server instead.</p>
                 <input value={relay} placeholder={SIGNAL_DEFAULT} onChange={(e) => void saveSettings({ syncRelay: e.target.value.trim() || undefined })} />
+                <p>If your devices can't reach each other directly (different networks, or a router that keeps devices apart), a TURN relay can pass the encrypted connection between them. Services such as Metered or Cloudflare offer free ones; paste the details here on both devices.</p>
+                <div className="grid3">
+                  <input aria-label="TURN address" placeholder="turn:relay.example.com:3478" value={turn?.urls ?? ''} onChange={(e) => void saveSettings({ syncTurn: e.target.value.trim() ? { ...turn, urls: e.target.value.trim() } : undefined })} />
+                  <input aria-label="TURN username" placeholder="Username" value={turn?.username ?? ''} disabled={!turn?.urls} onChange={(e) => turn && void saveSettings({ syncTurn: { ...turn, username: e.target.value } })} />
+                  <input aria-label="TURN password" placeholder="Password" type="password" value={turn?.credential ?? ''} disabled={!turn?.urls} onChange={(e) => turn && void saveSettings({ syncTurn: { ...turn, credential: e.target.value } })} />
+                </div>
               </details>
             </>
           )}
@@ -164,7 +172,15 @@ export function SyncModal() {
           {stage.k === 'error' && (
             <>
               <p className="error">{stage.message}</p>
-              <button onClick={() => setStage({ k: 'start' })}>Try again</button>
+              {stage.details && <pre className="small muted sync-details">{stage.details}</pre>}
+              <div className="row">
+                {stage.noLocal && !!navigator.mediaDevices?.getUserMedia && (
+                  <button onClick={() => shareLocalAddress().then(() => setShared('Done. Now start the sync again on both devices.'), () => setShared("The camera wasn't allowed, so the Wi-Fi address stays hidden."))}>Share Wi-Fi address</button>
+                )}
+                <button onClick={() => { setShared(''); setStage({ k: 'start' }); }}>Try again</button>
+              </div>
+              {shared && <p className="small">{shared}</p>}
+              {stage.noLocal && <p className="muted small">Sharing the address asks to use the camera, then turns it straight off: nothing is recorded. Browsers only reveal a device's Wi-Fi address to pages allowed to use the camera.</p>}
             </>
           )}
         </div>

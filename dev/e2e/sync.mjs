@@ -30,12 +30,12 @@ const texts = (p) => p.locator('.msg .markdown, .msg-body').allInnerTexts();
 async function sync(host, guest, pick) {
   await host.getByRole('button', { name: '⇄ Sync devices' }).click();
   await host.locator('.sync details summary').click();
-  await host.locator('.sync details input').fill(RELAY);
+  await host.locator('.sync details input').first().fill(RELAY);
   await host.getByRole('button', { name: 'Show code' }).click();
   const code = (await host.locator('.sync-code .code').innerText({ timeout: 10000 })).trim();
   await guest.getByRole('button', { name: '⇄ Sync devices' }).click();
   await guest.locator('.sync details summary').click();
-  await guest.locator('.sync details input').fill(RELAY);
+  await guest.locator('.sync details input').first().fill(RELAY);
   await guest.locator('.sync-start input').first().fill(code);
   await guest.getByRole('button', { name: 'Connect' }).click();
   await host.waitForSelector('.sync .modal-body >> text=Connected to', { timeout: 40000 });

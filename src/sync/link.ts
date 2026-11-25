@@ -141,16 +141,73 @@ export class Link {
   }
 }
 
-const ICE: RTCConfiguration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+/** Public address finders (STUN). They see only that a device asked; nothing passes through them. */
+const STUN = ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'];
+
+export interface Turn {
+  urls: string;
+  username?: string;
+  credential?: string;
+}
+
+/** Couldn't connect, with what each side could offer, in plain words, for the error screen. */
+export class ConnectError extends Error {
+  details: string;
+  noLocal: boolean;
+  constructor(message: string, details: string, noLocal = false) {
+    super(message);
+    this.details = details;
+    this.noLocal = noLocal;
+  }
+}
+
+interface Cand { type: string; address: string }
+function candidates(sdp: string, extra: string[] = []): Cand[] {
+  return [...sdp.split(/\r?\n/), ...extra]
+    .map((l) => l.replace(/^a=/, '').match(/^candidate:\S+ \d+ \S+ \d+ (\S+) \d+ typ (\w+)/))
+    .filter((m): m is RegExpMatchArray => !!m)
+    .map((m) => ({ address: m[1], type: m[2] }));
+}
+
+function describe(c: Cand[]) {
+  const host = c.filter((x) => x.type === 'host');
+  const parts = [
+    host.length ? (host.every((x) => x.address.endsWith('.local')) ? 'local address (hidden name)' : 'local address') : 'no local address',
+    c.some((x) => x.type === 'srflx' || x.type === 'prflx') ? 'internet address' : 'no internet address',
+  ];
+  if (c.some((x) => x.type === 'relay')) parts.push('relay');
+  return parts.join(', ');
+}
+
+/** Plain-language guess at why two devices couldn't reach each other. */
+export function diagnose(mine: Cand[], theirs: Cand[], state: string, role: 'host' | 'guest') {
+  const other = role === 'host' ? 'Phone or other device' : 'Other device';
+  const pub = (c: Cand[]) => new Set(c.filter((x) => x.type === 'srflx').map((x) => x.address));
+  const a = pub(mine), b = pub(theirs);
+  const lines = [`This device: ${describe(mine)}.`, `${other}: ${describe(theirs)}.`, `Connection check: ${state}.`];
+  let hint = '';
+  if (a.size && b.size && ![...a].some((x) => b.has(x)))
+    hint = "The two devices are reaching the internet from different addresses, so they're probably not on the same network (a phone on mobile data, a VPN, or a guest Wi-Fi). Put both on the same Wi-Fi and turn off any VPN.";
+  else if (!mine.some((x) => x.type === 'host'))
+    hint = "This device didn't share its Wi-Fi address (iPhones and some browsers keep it private unless the page may use the camera), so the two could only meet through the router, which many routers don't allow. Use \"Share Wi-Fi address\" below, then sync again.";
+  else if (!theirs.some((x) => x.type === 'host'))
+    hint = "The other device didn't share its Wi-Fi address (iPhones and some browsers keep it private unless the page may use the camera). On that device, use \"Share Wi-Fi address\" on its error screen, then sync again.";
+  else
+    hint = "Both devices are on the same network but couldn't reach each other directly. Some routers block devices from talking to each other (often called AP or client isolation, common on guest and mesh networks). Try another Wi-Fi, a phone hotspot, or add a TURN relay under Advanced.";
+  return { hint, details: lines.join('\n'), noLocal: !mine.some((x) => x.type === 'host') };
+}
 
 /**
  * Connects to the other device that has the same code. The host (the device showing the code)
  * posts an offer and waits; the guest (the one typing or scanning it) answers.
  */
-export async function connect(code: string, role: 'host' | 'guest', o: { signal?: AbortSignal; relay?: string; onStatus?: (s: string) => void } = {}): Promise<Link> {
+export async function connect(code: string, role: 'host' | 'guest', o: { signal?: AbortSignal; relay?: string; turn?: Turn; onStatus?: (s: string) => void } = {}): Promise<Link> {
   const relay = (o.relay || SIGNAL_DEFAULT).replace(/\/$/, '');
   const { topic, key } = await keysFor(code);
-  const pc = new RTCPeerConnection(ICE);
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: STUN }, ...(o.turn?.urls ? [o.turn] : [])] });
+  const found: string[] = [];
+  pc.addEventListener('icecandidate', (e) => e.candidate && found.push(e.candidate.candidate));
+  let remoteSdp = '';
   const post = async (n: Note) => {
     const r = await fetch(`${relay}/${topic}`, { method: 'POST', body: await seal(key, n), signal: o.signal });
     if (!r.ok) throw new Error(`The pairing relay answered ${r.status}.`);
@@ -179,7 +236,8 @@ export async function connect(code: string, role: 'host' | 'guest', o: { signal?
     }
   };
   try {
-    let ch: RTCDataChannel;
+    let ch: RTCDataChannel | undefined;
+    const incoming = new Promise<RTCDataChannel>((res) => (pc.ondatachannel = (e) => res(e.channel)));
     if (role === 'host') {
       ch = pc.createDataChannel('sync', { ordered: true });
       await pc.setLocalDescription(await pc.createOffer());
@@ -188,31 +246,60 @@ export async function connect(code: string, role: 'host' | 'guest', o: { signal?
       await post({ from: 'host', type: 'offer', sdp: pc.localDescription!.sdp, at: Date.now() });
       const a = await nextNote('answer');
       o.onStatus?.('Connecting…');
+      remoteSdp = a.sdp;
       await pc.setRemoteDescription({ type: 'answer', sdp: a.sdp });
     } else {
       o.onStatus?.('Looking for the other device…');
       const offer = await nextNote('offer');
+      remoteSdp = offer.sdp;
       await pc.setRemoteDescription({ type: 'offer', sdp: offer.sdp });
       await pc.setLocalDescription(await pc.createAnswer());
       await gathered(pc);
       o.onStatus?.('Connecting…');
       await post({ from: 'guest', type: 'answer', sdp: pc.localDescription!.sdp, at: Date.now() });
-      ch = await new Promise<RTCDataChannel>((res) => (pc.ondatachannel = (e) => res(e.channel)));
     }
-    await new Promise<void>((res, rej) => {
-      if (ch.readyState === 'open') return res();
-      const t = setTimeout(() => rej(new Error("Couldn't connect the two devices. Check they're on the same Wi-Fi and try again.")), 30_000);
-      ch.onopen = () => {
-        clearTimeout(t);
-        res();
+    const opened = await new Promise<RTCDataChannel>((res, rej) => {
+      const ready = (c: RTCDataChannel) => {
+        if (c.readyState === 'open') {
+          clearTimeout(t);
+          return res(c);
+        }
+        c.onopen = () => {
+          clearTimeout(t);
+          res(c);
+        };
       };
+      const states: string[] = [];
+      const give = () => {
+        const d = diagnose(candidates(pc.localDescription?.sdp ?? '', found), candidates(remoteSdp), states.join(' → ') || pc.iceConnectionState, role);
+        rej(new ConnectError(`Couldn't connect the two devices. ${d.hint}`, d.details, d.noLocal));
+      };
+      const t = setTimeout(give, 30_000);
+      pc.addEventListener('iceconnectionstatechange', () => {
+        states.push(pc.iceConnectionState);
+        if (pc.iceConnectionState === 'failed') {
+          clearTimeout(t);
+          give();
+        }
+      });
+      if (ch) ready(ch);
+      else void incoming.then(ready);
       o.signal?.addEventListener('abort', () => rej(new DOMException('Cancelled', 'AbortError')));
     });
-    return new Link(ch, pc);
+    return new Link(opened, pc);
   } catch (e) {
     pc.close();
     throw e;
   } finally {
     es.close();
   }
+}
+
+/**
+ * Browsers that hide this device's Wi-Fi address (Safari above all) share it once the page has
+ * camera permission. Asks for it and stops the camera straight away; nothing is recorded.
+ */
+export async function shareLocalAddress() {
+  const s = await navigator.mediaDevices.getUserMedia({ video: true });
+  s.getTracks().forEach((t) => t.stop());
 }
