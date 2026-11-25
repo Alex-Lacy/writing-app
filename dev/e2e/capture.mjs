@@ -8,8 +8,9 @@ p.on('request', (r) => { if (r.url().includes('8787/v1/chat') && r.method() === 
 await p.goto('http://127.0.0.1:5173');
 await p.waitForSelector('.modal');
 const card = p.locator('.card').first();
-await card.locator('input').nth(0).fill('Mock');
-await card.locator('input').nth(2).fill('http://localhost:8787/v1');
+await card.locator('.provider-more summary').click();
+await card.getByLabel('Address (base URL)').fill('http://localhost:8787/v1');
+await card.getByLabel('Name', { exact: true }).fill('Mock');
 await card.locator('input[type=password]').fill('test-key');
 await card.getByText('Test connection').click();
 await p.waitForSelector('text=Connected, 2 models');

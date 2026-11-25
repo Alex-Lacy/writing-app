@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { buildFor, currentChat, useStore } from '../store/store';
+import { buildFor, currentChat, modelFor, useStore } from '../store/store';
 import { MessageItem } from './MessageItem';
 import { Composer } from './Composer';
 import { SelectionToolbar } from './MessageTools';
@@ -9,6 +9,8 @@ export function ChatView() {
   const chat = useStore((s) => currentChat(s));
   const streamingId = useStore((s) => s.streamingId);
   const error = useStore((s) => s.error);
+  const helperOpen = useStore((s) => s.panel === 'chat-settings' && s.panelTab === 'helper');
+  const hasModel = useStore((s) => !!modelFor(currentChat(s), s));
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
 
@@ -36,7 +38,11 @@ export function ChatView() {
         {messages.length === 0 && (
           <div className="empty">
             <h2>{chat ? 'Start writing' : 'Writing Studio'}</h2>
-            <p>Pick a model up top, then just start typing. For a guided setup, use <b>+ New story</b> or the Helper in the Story panel (▤).</p>
+            {helperOpen && chat ? (
+              <p>Describe your story to the Helper on the right, then accept its suggestions. Or just start writing below.</p>
+            ) : (
+              <p>{hasModel ? 'Just start writing below.' : 'Pick a model up top, then start writing.'} For a guided setup, use <b>+ New story</b> or the Helper in the Story panel (▤).</p>
+            )}
             {!chat && location.protocol === 'https:' && !matchMedia('(display-mode: standalone)').matches && (
               <p className="muted small">
                 Tip: install it as an app so it opens full-screen and works offline. On iPhone or iPad: Share, then

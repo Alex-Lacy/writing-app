@@ -52,7 +52,7 @@ export function CodexTab() {
             </select>
             <button className="small" disabled={!pick} onClick={() => { void setAttached(chat, pick, true); setPick(''); }}>Attach</button>
           </div>
-        ) : <p className="muted small">No shared books yet. Use “Make reusable” above, or create one in the Library.</p>}
+        ) : <p className="muted small">No shared books yet. Once this story has entries, “Make reusable” turns them into one; or create one in the Library.</p>}
         <button className="small ghost" onClick={() => ui.openLibrary(true)}>Open the Library</button>
       </section>
     </div>

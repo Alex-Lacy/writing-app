@@ -98,7 +98,7 @@ export function Composer() {
         ref={ta}
         value={text}
         rows={1}
-        placeholder={waiting ?? (streaming ? 'Generating…' : 'Message (empty to just generate)')}
+        placeholder={waiting ?? (streaming ? 'Writing…' : 'Write the next part, or send empty to let the AI go on')}
         onChange={(e) => setText(e.target.value)}
         onPaste={(e) => {
           const imgs = [...e.clipboardData.files].filter((f) => f.type.startsWith('image/'));
@@ -120,10 +120,10 @@ export function Composer() {
           <>
             <button
               className="ghost small"
-              title="Add as a message without generating"
+              title="Add your text to the story without asking the AI for a reply"
               disabled={!text.trim()}
               onClick={() => { void insertMessage('user', text); setText(''); }}
-            >Add</button>
+            >Add only</button>
             <button className="primary" onClick={submit} disabled={!!waiting} title={waiting}>{waiting ? 'Waiting…' : 'Send'}</button>
           </>
         )}

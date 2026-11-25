@@ -54,8 +54,8 @@ export function FilterTab() {
         )}
       </section>
 
-      <section>
-        <h3>Rules <span className="muted small">{total} hit{total === 1 ? '' : 's'} in this story</span></h3>
+      <details>
+        <summary><b>Rules</b> <span className="muted small">{rules.length} rules, {total} hit{total === 1 ? '' : 's'} in this story</span></summary>
         <input placeholder="Search rules" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="rule-list">
           {shown.map((r) => {
@@ -70,7 +70,7 @@ export function FilterTab() {
           })}
         </div>
         <p className="muted small">Switching a rule off applies to this story only.</p>
-      </section>
+      </details>
 
       <details>
         <summary>Your own rules</summary>

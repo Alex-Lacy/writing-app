@@ -42,7 +42,7 @@ export const MessageItem = memo(function MessageItem({ m, isLast, outOfContext }
   };
 
   return (
-    <div className={`msg msg-${m.role}${outOfContext ? ' msg-out' : ''}`} data-mid={m.id}>
+    <div className={`msg msg-${m.role}${outOfContext ? ' msg-out' : ''}${isLast ? ' msg-last' : ''}`} data-mid={m.id} tabIndex={-1}>
       <div className="msg-head">
         <span className="msg-role">{m.role === 'assistant' ? modelLabel(model) : m.role === 'user' ? 'You' : 'System'}</span>
         {outOfContext && <span className="badge" title="Older than what fits in the context window">out of context</span>}
@@ -120,14 +120,19 @@ export const MessageItem = memo(function MessageItem({ m, isLast, outOfContext }
           <button className="ghost" onClick={startEdit} disabled={busy}>Edit</button>
           {m.role !== 'system' && <button className="ghost" onClick={() => ui.openRewrite({ messageId: m.id })} disabled={busy} title="Rewrite with your feedback, or proofread. Highlight text to work on just part of it.">Rewrite</button>}
           <button className="ghost" onClick={() => regenerate(m.id)} disabled={busy} title={m.role === 'assistant' ? 'New version of this reply' : 'Regenerate the reply to this'}>Retry</button>
-          {!isLast && <button className="ghost" onClick={() => duplicateChat(m.chatId, m.id)} disabled={busy} title="Copy the story up to here into a new chat, to try a different direction">Branch</button>}
-          {m.swipes.length > 1 && <button className="ghost" onClick={() => deleteSwipe(m.id)} disabled={busy}>Delete version</button>}
-          <button className="ghost" onClick={() => deleteMessage(m.id)} disabled={busy}>Delete</button>
-          {!isLast && (
-            <button className="ghost danger" disabled={busy} onClick={() => confirm('Delete this message and everything after it?') && deleteFrom(m.id)}>
-              Delete to end
-            </button>
-          )}
+          <details className="more" onClick={(e) => { if ((e.target as HTMLElement).tagName === 'BUTTON') (e.currentTarget as HTMLDetailsElement).open = false; }}>
+            <summary title="More">⋯</summary>
+            <div className="more-menu">
+              {!isLast && <button className="ghost" onClick={() => duplicateChat(m.chatId, m.id)} disabled={busy} title="Copy the story up to here into a new story, to try a different direction">Branch from here</button>}
+              {m.swipes.length > 1 && <button className="ghost" onClick={() => deleteSwipe(m.id)} disabled={busy}>Delete this version</button>}
+              <button className="ghost" onClick={() => deleteMessage(m.id)} disabled={busy}>Delete message</button>
+              {!isLast && (
+                <button className="ghost danger" disabled={busy} onClick={() => confirm('Delete this message and everything after it?') && deleteFrom(m.id)}>
+                  Delete from here to the end
+                </button>
+              )}
+            </div>
+          </details>
         </div>
       )}
     </div>

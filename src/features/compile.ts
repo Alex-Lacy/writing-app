@@ -12,7 +12,7 @@ export interface CompileOptions {
   chapters: boolean;
 }
 
-export const DEFAULT_COMPILE: CompileOptions = { include: 'story', stripNotes: true, chapters: false };
+export const DEFAULT_COMPILE: CompileOptions = { include: 'all', stripNotes: true, chapters: false };
 
 const SCENE_BREAK = /^\s*(?:\*\s*){3,}$|^\s*(?:-\s*){3,}$|^\s*(?:#\s*){3}$|^\s*~{3,}\s*$/;
 

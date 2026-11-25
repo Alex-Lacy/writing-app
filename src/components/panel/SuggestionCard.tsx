@@ -33,7 +33,7 @@ function title(x: Suggestion, bookName: (id: string) => string): string {
 }
 
 /** One proposed change: before and after, with Accept, Edit and Reject (or Undo once accepted). */
-export function SuggestionCard({ x }: { x: Suggestion }) {
+export function SuggestionCard({ x, hideSource }: { x: Suggestion; hideSource?: boolean }) {
   const books = useStore((s) => s.codex);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(x.after);
@@ -44,12 +44,12 @@ export function SuggestionCard({ x }: { x: Suggestion }) {
     <div className={`sg-card sg-${x.status}`}>
       <div className="sg-head">
         <b>{title(x, bookName)}</b>
-        <span className="chip">{SOURCE[x.source]}</span>
+        {!hideSource && <span className="chip">{SOURCE[x.source]}</span>}
       </div>
       {x.reason && <p className="muted small">{x.reason}</p>}
       {keys && keys.length > 0 && <p className="muted small">Triggers: {keys.join(', ')}</p>}
       {x.before && t.kind !== 'summary' && <div className="sg-before">{x.before}</div>}
-      {t.kind !== 'codex-remove' && t.kind !== 'style-toggle' && (editing ? (
+      {t.kind !== 'codex-remove' && t.kind !== 'style-toggle' && t.kind !== 'length' && (editing ? (
         <textarea rows={Math.min(12, Math.max(3, Math.ceil(text.length / 45)))} value={text} onChange={(e) => setText(e.target.value)} />
       ) : (
         <div className="sg-after">{x.after}</div>

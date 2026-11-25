@@ -3,6 +3,7 @@ import { askHelper, clearThread, helpersList } from '../../features/helper';
 import { renderMarkdown } from '../../lib/markdown';
 import { currentChat, ui, useStore } from '../../store/store';
 import { SuggestionCard } from './SuggestionCard';
+import { accept } from '../../store/suggestions';
 
 /** Talk to a Helper about this story; its proposed changes show as cards right in the conversation. */
 export function HelperTab() {
@@ -53,8 +54,11 @@ export function HelperTab() {
             {m.role === 'user' ? <p>{m.content}</p> : <div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }} />}
             {m.suggestionIds?.map((id) => {
               const x = suggestions.find((s) => s.id === id);
-              return x ? <SuggestionCard key={id} x={x} /> : null;
+              return x ? <SuggestionCard key={id} x={x} hideSource /> : null;
             })}
+            {(m.suggestionIds?.filter((id) => suggestions.some((s) => s.id === id && s.status === 'pending')).length ?? 0) > 1 && (
+              <button className="small primary" onClick={async () => { for (const id of m.suggestionIds!) await accept(id); }}>Accept all</button>
+            )}
           </div>
         ))}
         {live !== undefined && <div className="helper-msg assistant"><div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(live) || '<span class="muted">Thinking…</span>' }} /></div>}

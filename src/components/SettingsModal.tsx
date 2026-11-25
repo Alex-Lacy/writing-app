@@ -59,15 +59,25 @@ function Providers({ onDone }: { onDone: () => void }) {
 
   return (
     <div>
-      <p className="muted small">Any OpenAI-compatible API works. Keys are stored only in this browser.</p>
+      {!providers.some((p) => p.apiKey) ? (
+        <p className="welcome">
+          <b>Welcome to Writing Studio.</b> To start, paste your API key below (for Featherless, it's on your
+          featherless.ai account page), press <b>Test connection</b>, then <b>Pick models</b>.
+        </p>
+      ) : (
+        <p className="muted small">Any OpenAI-compatible service works. Keys are stored only on this device.</p>
+      )}
       {providers.map((p) => (
         <div key={p.id} className="card">
-          <div className="grid2">
-            <label className="field"><span>Name</span><input value={p.name} onChange={(e) => update(p, { name: e.target.value })} /></label>
-            <label className="field"><span>Context cap (tokens)</span><input type="number" value={p.contextLimit} onChange={(e) => update(p, { contextLimit: Number(e.target.value) || 8192 })} /></label>
-          </div>
-          <label className="field"><span>Base URL</span><input value={p.baseUrl} onChange={(e) => update(p, { baseUrl: e.target.value.trim() })} /></label>
-          <label className="field"><span>API key</span><input type="password" autoComplete="off" value={p.apiKey} onChange={(e) => update(p, { apiKey: e.target.value.trim() })} placeholder="sk-… / Featherless key" /></label>
+          <label className="field"><span>{p.name} API key</span><input type="password" autoComplete="off" value={p.apiKey} onChange={(e) => update(p, { apiKey: e.target.value.trim() })} placeholder="Paste your key here" /></label>
+          <details className="provider-more" open={!/featherless\.ai/.test(p.baseUrl) || undefined}>
+            <summary className="muted small">Service details: name, address, context limit</summary>
+            <div className="grid2">
+              <label className="field"><span>Name</span><input value={p.name} onChange={(e) => update(p, { name: e.target.value })} /></label>
+              <label className="field" title="The most context this service allows, whatever the model supports"><span>Context limit (tokens)</span><input type="number" value={p.contextLimit} onChange={(e) => update(p, { contextLimit: Number(e.target.value) || 8192 })} /></label>
+            </div>
+            <label className="field"><span>Address (base URL)</span><input value={p.baseUrl} onChange={(e) => update(p, { baseUrl: e.target.value.trim() })} /></label>
+          </details>
           <div className="row">
             <button onClick={() => test(p)}>Test connection</button>
             <button className="ghost" onClick={onDone}>Pick models →</button>
@@ -77,7 +87,7 @@ function Providers({ onDone }: { onDone: () => void }) {
           {status[p.id] && <p className="small">{status[p.id]}</p>}
         </div>
       ))}
-      <button className="ghost" onClick={() => upsertProvider({ id: uid(), name: 'New provider', baseUrl: 'https://', apiKey: '', contextLimit: 32768 })}>+ Add provider</button>
+      <button className="ghost" onClick={() => upsertProvider({ id: uid(), name: 'New provider', baseUrl: 'https://', apiKey: '', contextLimit: 32768 })}>+ Add another service</button>
     </div>
   );
 }
@@ -140,7 +150,7 @@ function Models() {
         <div key={m.key} className="model-row">
           <input className="nick" value={m.nickname ?? ''} placeholder={modelLabel({ ...m, nickname: undefined })} onChange={(e) => upsertModel({ ...m, nickname: e.target.value || undefined })} title="Nickname" />
           <span className="muted small model-id" title={m.modelId}>{m.modelId} · {providers.find((p) => p.id === m.providerId)?.name} <ModelBadges m={m} showCtx={false} /></span>
-          <input className="ctx" type="number" value={m.contextLength ?? ''} placeholder="ctx" title="Model context length (optional)" onChange={(e) => upsertModel({ ...m, contextLength: e.target.value ? Number(e.target.value) : undefined })} />
+          <input className="ctx" type="number" value={m.contextLength ?? ''} placeholder="context" title="Model context length in tokens (optional)" onChange={(e) => upsertModel({ ...m, contextLength: e.target.value ? Number(e.target.value) : undefined })} />
           <select className="think-sel" value={m.thinking ?? ''} title="Does this model think before replying? Turns on the Thinking control in chat." onChange={(e) => upsertModel({ ...m, thinking: (e.target.value || undefined) as ModelEntry['thinking'] })}>
             <option value="">No thinking</option>
             <option value="optional">Thinking optional</option>

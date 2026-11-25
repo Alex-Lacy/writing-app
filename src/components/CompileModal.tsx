@@ -31,8 +31,8 @@ export function CompileModal() {
             <label className="field small">
               <span>Include</span>
               <select value={o.include} onChange={(e) => set({ include: e.target.value as CompileOptions['include'] })}>
-                <option value="story">The story only (AI replies)</option>
-                <option value="all">Everything, your messages too</option>
+                <option value="all">The whole story: your parts and the AI's</option>
+                <option value="story">Only the AI's replies</option>
               </select>
             </label>
             <label className="switch small"><input type="checkbox" checked={o.stripNotes} onChange={(e) => set({ stripNotes: e.target.checked })} /> Remove [bracketed notes]</label>
