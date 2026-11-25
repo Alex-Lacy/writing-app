@@ -61,3 +61,11 @@ export function recommendedFor(baseUrl: string): RecommendedModel[] {
   if (/featherless\.ai/i.test(baseUrl)) return RECOMMENDED_FEATHERLESS;
   return [];
 }
+
+/** A best guess, from the name, at whether a model not on the list thinks before replying. */
+export function guessThinking(modelId: string): 'always' | 'optional' | undefined {
+  const rec = RECOMMENDED_FEATHERLESS.find((r) => r.id === modelId);
+  if (rec) return rec.thinking;
+  if (/qwq|deepseek-r1|-r1\b|thinking|gpt-oss|minimax-m\d/i.test(modelId)) return 'always';
+  if (/qwen-?3|glm-?[45]|deepseek-v3\.[12]|deepseek-v4|kimi-k[23]|hermes-4/i.test(modelId)) return 'optional';
+}

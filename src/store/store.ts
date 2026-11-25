@@ -5,6 +5,8 @@ import { backstopCut, lengthBlocks } from '../context/length';
 import { CODEX_SCAN, CODEX_SHARE, codexBlocks, globalNotesBlocks, styleBlocks, tagsBlocks, summaryBlocks, triggeredEntries } from '../context/codex';
 import { calibrate, currentCharsPerToken, setCharsPerToken } from '../context/tokens';
 import { friendlyError, streamChat, type ProviderError, type WireMessage } from '../providers/openai';
+import { applySplit } from '../providers/thinkSplitter';
+import { guessThinking } from '../providers/recommended';
 import {
   type Attachment, type Job, activeSwipe, DEFAULT_SETTINGS, FEATHERLESS_PRESET, STORY_PROMPT,
   type AppSettings, type Chat, type CodexBook, type HelperThread, type Message, type Suggestion, type ModelEntry, type Preset, type ProviderConfig, type Swipe,
@@ -402,6 +404,19 @@ export function thinkingExtra(chat: Chat, model: ModelEntry | undefined): Record
   };
 }
 
+/**
+ * Whether the reply will start with reasoning. Qwen and GLM hybrids think unless told not to;
+ * other hybrids only when asked.
+ */
+export function expectsThinking(chat: Chat, m: ModelEntry | undefined): boolean {
+  const kind = m && (m.thinking ?? guessThinking(m.modelId));
+  if (!m || !kind) return false;
+  const mode = chat.thinking ?? 'default';
+  if (kind === 'always') return true;
+  if (mode === 'off') return false;
+  return mode !== 'default' || /qwen|qwq|glm/i.test(m.modelId);
+}
+
 /** Thinking models spend thousands of tokens reasoning before they write, so keep more room for them. */
 /**
  * Room kept free for the reply when older messages are trimmed. Sized from the Length setting,
@@ -580,8 +595,11 @@ async function generateNow(targetId?: string, opts: { continueId?: string; fromS
     }
   };
   const runOnce = async (extra?: Record<string, unknown>) => {
-    for await (const ev of streamChat(provider, model.modelId, ctx.messages as WireMessage[], params, abort!.signal, extra)) {
-      if (ev.type === 'content') {
+    for await (const ev of streamChat(provider, model.modelId, ctx.messages as WireMessage[], params, abort!.signal, extra, !cont && expectsThinking(chat, model))) {
+      if (ev.type === 'moved') {
+        const r = applySplit({ content: swipe.content, reasoning: swipe.reasoning ?? '' }, { content: '', reasoning: '', moved: ev });
+        swipe = { ...swipe, ...r };
+      } else if (ev.type === 'content') {
         let text = ev.text;
         // Servers drop the leading space of a continuation ("boots" + "splashing").
         if (cont && swipe.content.length === startOffset && startOffset > 0) {

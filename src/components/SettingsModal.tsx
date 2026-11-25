@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { repo } from '../db/db';
 import { uid } from '../lib/id';
 import { friendlyError, listModelsPage, PAGE_SIZE, type RemoteModel } from '../providers/openai';
-import { recommendedFor, type RecommendedModel } from '../providers/recommended';
+import { guessThinking, recommendedFor, type RecommendedModel } from '../providers/recommended';
 import { ModelBadges } from './ModelBadges';
 import type { AppSettings, Job, ModelEntry, Theme } from '../types';
 import { JOB_LABEL } from '../ai/jobs';
@@ -140,7 +140,7 @@ function Models() {
   }, [remote, q]);
   const add = (modelId: string, contextLength?: number, vision?: boolean, tools?: boolean) => {
     if (!provider) return;
-    upsertModel({ key: `${provider.id}::${modelId}`, providerId: provider.id, modelId, contextLength, vision, tools });
+    upsertModel({ key: `${provider.id}::${modelId}`, providerId: provider.id, modelId, contextLength, vision, tools, thinking: guessThinking(modelId) });
   };
 
   return (

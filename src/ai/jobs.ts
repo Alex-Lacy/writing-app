@@ -1,6 +1,7 @@
 // Side jobs (Helper, Proofread, suggested updates, summaries, Cliché Filter rewrites): which
 // model runs each, and a queue so they never compete with the story reply. Featherless plans
 // cap how many requests can run at once, so jobs wait until the story reply has finished.
+import { applySplit } from '../providers/thinkSplitter';
 import { streamChat, type ProviderError, type WireMessage } from '../providers/openai';
 
 const RETRY_WAITS = [5000, 10000, 20000, 30000];
@@ -158,9 +159,12 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
         try {
           o.onProgress?.({ phase: 'sent', reasoning: reasoning.length });
           watch(FIRST_BYTE_MS, `${m.provider.name} didn't start the reply within ${FIRST_BYTE_MS / 60_000} minutes (the model may be busy). Try again in a moment.`);
-          for await (const ev of streamChat(m.provider, m.modelId, o.messages, { maxTokens: (o.maxTokens ?? 2048) + thinkRoom, temperature: o.temperature ?? 0.5 }, abort.signal, extra)) {
+          for await (const ev of streamChat(m.provider, m.modelId, o.messages, { maxTokens: (o.maxTokens ?? 2048) + thinkRoom, temperature: o.temperature ?? 0.5 }, abort.signal, extra, !!thinkRoom)) {
             watch(SILENT_MS, `The reply stopped arriving for ${SILENT_MS / 60_000} minutes, so it was ended. Try again.`);
-            if (ev.type === 'content') {
+            if (ev.type === 'moved') {
+              ({ content: text, reasoning } = applySplit({ content: text, reasoning }, { content: '', reasoning: '', moved: ev }));
+              o.onText?.(text);
+            } else if (ev.type === 'content') {
               text += ev.text;
               o.onText?.(text);
               o.onProgress?.({ phase: 'writing', reasoning: reasoning.length });

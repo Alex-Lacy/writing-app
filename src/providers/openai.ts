@@ -1,5 +1,5 @@
 import type { GenParams, ProviderConfig } from '../types';
-import { ThinkSplitter } from './thinkSplitter';
+import { applySplit, ThinkSplitter, type SplitOut } from './thinkSplitter';
 
 // Generic OpenAI-compatible client (Featherless, OpenRouter, local llama.cpp/Ollama, OpenAI itself...).
 // Nothing in here is Featherless-specific beyond reading optional fields from /models.
@@ -26,6 +26,8 @@ export interface RemoteModel {
 export type StreamEvent =
   | { type: 'content'; text: string }
   | { type: 'reasoning'; text: string }
+  /** Text already sent as one kind was really the other: take it off the end of that field. */
+  | { type: 'moved'; to: 'reasoning' | 'content'; text: string }
   | { type: 'done'; finishReason?: string; usage?: { prompt_tokens?: number; completion_tokens?: number } };
 
 export class ProviderError extends Error {
@@ -136,6 +138,8 @@ export async function* streamChat(
   params: GenParams,
   signal?: AbortSignal,
   extra?: Record<string, unknown>,
+  /** The model is expected to think: text before a closing think tag is reasoning even with no opening tag. */
+  expectThinking = false,
 ): AsyncGenerator<StreamEvent> {
   const res = await fetch(`${base(p)}/chat/completions`, {
     method: 'POST',
@@ -151,18 +155,23 @@ export async function* streamChat(
   if (ctype.includes('application/json')) {
     const j = await res.json();
     const msg = j.choices?.[0]?.message ?? {};
-    const split = new ThinkSplitter();
-    const a = split.push(msg.content ?? '');
-    const b = split.flush();
-    const reasoning = (msg.reasoning_content ?? msg.reasoning ?? '') + a.reasoning + b.reasoning;
-    if (reasoning) yield { type: 'reasoning', text: reasoning };
-    yield { type: 'content', text: a.content + b.content };
+    const field = msg.reasoning_content ?? msg.reasoning ?? '';
+    const split = new ThinkSplitter(expectThinking && !field);
+    let acc = { content: '', reasoning: field };
+    for (const out of [split.push(msg.content ?? ''), split.flush()]) acc = applySplit(acc, out);
+    if (acc.reasoning) yield { type: 'reasoning', text: acc.reasoning };
+    yield { type: 'content', text: acc.content };
     yield { type: 'done', finishReason: j.choices?.[0]?.finish_reason, usage: j.usage };
     return;
   }
 
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-  const split = new ThinkSplitter();
+  const split = new ThinkSplitter(expectThinking);
+  const emit = function* (out: SplitOut): Generator<StreamEvent> {
+    if (out.moved) yield { type: 'moved', ...out.moved };
+    if (out.reasoning) yield { type: 'reasoning', text: out.reasoning };
+    if (out.content) yield { type: 'content', text: out.content };
+  };
   let buf = '';
   let finishReason: string | undefined;
   let usage: any;
@@ -181,13 +190,12 @@ export async function* streamChat(
     if (ch.finish_reason) finishReason = ch.finish_reason;
     const d = ch.delta ?? ch.message ?? {};
     const r = d.reasoning_content ?? d.reasoning;
-    if (r) yield { type: 'reasoning', text: r };
-    const c = d.content ?? ch.text;
-    if (c) {
-      const out = split.push(c);
-      if (out.reasoning) yield { type: 'reasoning', text: out.reasoning };
-      if (out.content) yield { type: 'content', text: out.content };
+    if (r) {
+      yield* emit(split.reasoningElsewhere());
+      yield { type: 'reasoning', text: r };
     }
+    const c = d.content ?? ch.text;
+    if (c) yield* emit(split.push(c));
   };
 
   for (;;) {
@@ -208,9 +216,7 @@ export async function* streamChat(
     const data = buf.slice(5).trim();
     if (data && data !== '[DONE]') yield* handle(data);
   }
-  const rest = split.flush();
-  if (rest.reasoning) yield { type: 'reasoning', text: rest.reasoning };
-  if (rest.content) yield { type: 'content', text: rest.content };
+  yield* emit(split.flush());
   yield { type: 'done', finishReason, usage };
 }
 
