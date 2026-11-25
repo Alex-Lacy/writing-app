@@ -311,6 +311,9 @@ export interface AppSettings {
   storyWidth?: number;
   /** Desktop: chat list hidden. */
   sidebarHidden?: boolean;
+  /** Story panel width in pixels (desktop), and whether it's expanded to half the window. */
+  panelWidth?: number;
+  panelWide?: boolean;
   /** Size of everything else (buttons, panels), in px. */
   uiFontSize?: number;
   /** Library: notes sent with every chat that has them on. */

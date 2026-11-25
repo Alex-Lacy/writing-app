@@ -387,3 +387,8 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .wt-on { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .wt-on input { width: auto; margin: 0; }
 .wt-block.off textarea, .wt-block.off > p, .wt-block.off .switch, .wt-block.off details { opacity: .5; }
+@media (min-width: 861px) { .panel { position: relative; width: var(--pw, 380px); } .panel.wide { width: 50vw; } }
+.panel-resize { position: absolute; left: -3px; top: 0; bottom: 0; width: 7px; cursor: col-resize; z-index: 5; }
+.panel-resize:hover, .panel-resize:active { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+@media (max-width: 860px) { .panel-resize, .panel-wide { display: none; } }
+.helper-input textarea { resize: none; overflow-y: auto; }

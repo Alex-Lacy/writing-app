@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { askHelper, clearThread, deleteHelperMessage, editHelperMessage, helpersList, retryHelper, stopHelper } from '../../features/helper';
 import { renderMarkdown } from '../../lib/markdown';
 import { currentChat, ui, useStore } from '../../store/store';
@@ -14,6 +14,14 @@ export function HelperTab() {
   const suggestions = useStore((s) => s.suggestions);
   const hasStory = useStore((s) => s.messages.length > 0);
   const [text, setText] = useState('');
+  const box = useRef<HTMLTextAreaElement>(null);
+  // Grows upward with what's typed (the box sits at the bottom), up to half the window.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 64), window.innerHeight * 0.5)}px`;
+  }, [text]);
   const anyLive = useStore((s) => s.helperLive);
   const helpers = helpersList();
   const fresh = !hasStory && !chat?.writing.background.trim();
@@ -33,7 +41,10 @@ export function HelperTab() {
     setText('');
     void askHelper(chat.id, helper.id, t);
   };
-  const edit = async (i: number) => setText(await editHelperMessage(chat.id, helper.id, i));
+  const edit = async (i: number) => {
+    setText(await editHelperMessage(chat.id, helper.id, i));
+    requestAnimationFrame(() => box.current?.focus());
+  };
   const count = thread?.messages.length ?? 0;
 
   return (
@@ -95,7 +106,8 @@ export function HelperTab() {
       <div className="helper-input">
         {scroll.away && <button className="jump-latest" onClick={scroll.jump}>{live !== undefined ? '↓ Follow the reply' : '↓ Latest'}</button>}
         <textarea
-          rows={3}
+          ref={box}
+          rows={2}
           value={text}
           placeholder={helper.id === 'helper-new-story' ? 'Describe the story you want to write…' : helper.id === 'helper-research' ? 'What should we look into? e.g. "The Witcher: Yennefer and Geralt before the books start"' : 'What would you like to change?'}
           onChange={(e) => setText(e.target.value)}
