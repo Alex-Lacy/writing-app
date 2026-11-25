@@ -35,10 +35,10 @@ export interface Preset {
 }
 
 export interface GenParams {
-  /** Room always kept free for the reply when fitting history. */
+  /** Wire max_tokens. Computed per request (see sendMaxTokens); the stored value is unused. */
   maxTokens: number;
-  /** Let the reply use all remaining context instead of stopping at maxTokens (default on). Needed for thinking models, whose reasoning counts against the limit. */
-  autoMaxTokens?: boolean;
+  /** Optional hard cap on one reply in tokens, thinking included. Unset = no cap beyond the context window. */
+  hardCap?: number;
   temperature?: number;
   topP?: number;
   minP?: number;
@@ -119,10 +119,12 @@ export interface AppSettings {
   defaultParams: GenParams;
   defaultSystemPrompt: string;
   defaultWriting: WritingSettings;
-  /** Tokens kept free on top of maxTokens when fitting history. */
+  /** Extra tokens kept free (on top of the reply room) when fitting history; covers estimate error. */
   safetyMargin: number;
   enterToSend: boolean;
   theme: 'dark' | 'light';
+  /** One-time data migrations already applied. */
+  migrations?: string[];
 }
 
 export const DEFAULT_WRITING: WritingSettings = {
@@ -130,10 +132,10 @@ export const DEFAULT_WRITING: WritingSettings = {
   memory: '',
   authorsNote: '',
   anDepth: 1,
-  anRole: 'system',
+  anRole: 'inline',
 };
 
-export const DEFAULT_PARAMS: GenParams = { maxTokens: 2048, autoMaxTokens: true, temperature: 0.8 };
+export const DEFAULT_PARAMS: GenParams = { maxTokens: 2048, temperature: 0.8 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
   defaultParams: DEFAULT_PARAMS,

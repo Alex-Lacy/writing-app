@@ -9,7 +9,7 @@ import {
 } from '../types';
 import { uid } from '../lib/id';
 
-type Panel = 'none' | 'chat-settings' | 'context';
+type Panel = 'none' | 'chat-settings';
 export type SettingsTab = 'providers' | 'models' | 'presets' | 'general' | 'data';
 
 interface State {
@@ -27,6 +27,7 @@ interface State {
   panel: Panel;
   settingsOpen: boolean;
   settingsTab: SettingsTab;
+  contextOpen: boolean;
   lastContext?: BuildResult;
 }
 
@@ -44,6 +45,7 @@ export const useStore = create<State>()(() => ({
   panel: 'none',
   settingsOpen: false,
   settingsTab: 'providers',
+  contextOpen: false,
 }));
 
 const get = useStore.getState;
@@ -87,9 +89,19 @@ async function doInit() {
     provs = [fl];
   }
   const s: AppSettings = { ...DEFAULT_SETTINGS, ...settings };
+  // v0.3: Author's Note goes inline by default. DeepSeek-style templates move every system
+  // message to the top of the prompt, so a mid-chat system note lands far from the end.
+  let allChats = chats;
+  if (!s.migrations?.includes('an-inline')) {
+    allChats = chats.map((c) => (c.writing.anRole === 'system' ? { ...c, writing: { ...c.writing, anRole: 'inline' as const } } : c));
+    for (const c of allChats) await repo.put('chats', c);
+    s.defaultWriting = { ...s.defaultWriting, anRole: 'inline' };
+    s.migrations = [...(s.migrations ?? []), 'an-inline'];
+    await repo.putSettings(s);
+  }
   s.activeProviderId ??= provs[0].id;
-  set({ ready: true, settings: s, providers: provs, models, presets, chats: sortChats(chats), settingsOpen: !provs.some((p) => p.apiKey) });
-  const first = sortChats(chats)[0];
+  set({ ready: true, settings: s, providers: provs, models, presets, chats: sortChats(allChats), settingsOpen: !provs.some((p) => p.apiKey) });
+  const first = sortChats(allChats)[0];
   if (first) await selectChat(first.id);
 }
 
@@ -218,7 +230,7 @@ export function buildFor(chat: Chat, msgs: Message[]): BuildResult {
     systemPrompt: chat.systemPrompt,
     blocks: [
       ...writingBlocks(chat.writing),
-      ...lengthBlocks(chat.length, chat.writing.enabled && chat.writing.anRole === 'inline' ? 'inline' : 'system'),
+      ...lengthBlocks(chat.length),
       /* Phase 2: lorebook, summary */
     ],
     history: historyItems(msgs),
@@ -244,18 +256,24 @@ export function thinkingExtra(chat: Chat, model: ModelEntry | undefined): Record
 }
 
 /** Thinking models spend thousands of tokens reasoning before they write, so keep more room for them. */
-export const THINKING_RESERVE = 6144;
+/**
+ * Room kept free for the reply when older messages are trimmed. Sized from the Length setting,
+ * plus extra when the model thinks (reasoning counts against the same limit).
+ */
+const LENGTH_ROOM: Record<string, number> = { any: 2048, short: 600, medium: 1000, long: 1600, scene: 2400, chapter: 7000, story: 12000 };
+export const THINKING_ROOM = 4096;
 export function replyReserve(chat: Chat, s: State = get()) {
   const m = modelFor(chat, s);
-  return m?.thinking ? Math.max(chat.params.maxTokens, THINKING_RESERVE) : chat.params.maxTokens;
+  const thinks = m?.thinking && !(m.thinking === 'optional' && chat.thinking === 'off');
+  const room = (LENGTH_ROOM[chat.length ?? 'any'] ?? 2048) + (thinks ? THINKING_ROOM : 0);
+  return chat.params.hardCap ? Math.min(room, chat.params.hardCap) : room;
 }
 
 /** max_tokens actually sent: with auto on, everything left in the context window after the prompt. */
 export function sendMaxTokens(chat: Chat, ctx: BuildResult, s: State = get()) {
   const reserve = replyReserve(chat, s);
-  if (chat.params.autoMaxTokens === false) return chat.params.maxTokens;
-  const room = contextLimitFor(chat, s) - s.settings.safetyMargin - ctx.tokens.total;
-  return Math.max(reserve, Math.floor(room));
+  const room = Math.max(reserve, Math.floor(contextLimitFor(chat, s) - s.settings.safetyMargin - ctx.tokens.total));
+  return chat.params.hardCap ? Math.min(room, chat.params.hardCap) : room;
 }
 
 export async function send(text: string) {
@@ -468,5 +486,6 @@ export const ui = {
   setPanel: (panel: Panel) => set({ panel: get().panel === panel ? 'none' : panel }),
   openSettings: (open: boolean, tab: SettingsTab = 'providers') => set({ settingsOpen: open, settingsTab: tab }),
   setSettingsTab: (tab: SettingsTab) => set({ settingsTab: tab }),
+  openContext: (open: boolean) => set({ contextOpen: open }),
   clearError: () => set({ error: undefined }),
 };

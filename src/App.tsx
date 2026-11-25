@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { ChatSettingsPanel } from './components/ChatSettingsPanel';
 import { ChatView } from './components/ChatView';
-import { ContextPanel } from './components/ContextPanel';
+import { ContextModal } from './components/ContextModal';
 import { SettingsModal } from './components/SettingsModal';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
@@ -11,6 +11,7 @@ export default function App() {
   const ready = useStore((s) => s.ready);
   const panel = useStore((s) => s.panel);
   const settingsOpen = useStore((s) => s.settingsOpen);
+  const contextOpen = useStore((s) => s.contextOpen);
   const theme = useStore((s) => s.settings.theme);
 
   useEffect(() => { void init(); }, []);
@@ -27,15 +28,13 @@ export default function App() {
       {panel !== 'none' && (
         <aside className="panel">
           <header className="panel-head">
-            <div className="tabs">
-              <button className={panel === 'chat-settings' ? 'tab active' : 'tab'} onClick={() => useStore.setState({ panel: 'chat-settings' })}>Chat settings</button>
-              <button className={panel === 'context' ? 'tab active' : 'tab'} onClick={() => useStore.setState({ panel: 'context' })}>Context</button>
-            </div>
+            <b>Chat settings</b>
             <button className="icon" onClick={() => ui.setPanel('none')}>✕</button>
           </header>
-          {panel === 'chat-settings' ? <ChatSettingsPanel /> : <ContextPanel />}
+          <ChatSettingsPanel />
         </aside>
       )}
+      {contextOpen && <ContextModal />}
       {settingsOpen && <SettingsModal />}
     </div>
   );

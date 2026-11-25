@@ -5,23 +5,36 @@ import { estimateTokens, MESSAGE_OVERHEAD } from './tokens';
 /**
  * Context assembly pipeline.
  *
- * Every piece of injected text (Memory, Author's Note, and later lorebook entries, the
- * condensed-history summary, search results) is a ContextBlock produced by a contributor.
- * The builder places blocks, fits history into the token budget oldest-first, and reports
- * exactly what was sent so the UI can show it.
+ * Every piece of injected text (Memory, Author's Note, the length instruction, and later
+ * lorebook entries, the condensed-history summary, search results) is a ContextBlock produced
+ * by a contributor. The builder places blocks, fits history into the token budget newest-first,
+ * and returns both the wire messages and an annotated copy (which part came from where, in
+ * the exact order sent) for the context viewer.
  */
 
 export type Placement =
   /** Joined into the single leading system message, sorted by `order`. */
   | { kind: 'top'; order: number }
-  /** Inserted `depth` messages from the end of the history (1 = just before the latest). */
-  | { kind: 'depth'; depth: number; mode: 'system' | 'inline' };
+  /**
+   * `depth` messages from the end of the history (1 = just before the latest message).
+   * 'system' adds a system message there; 'inline' folds the text into that message.
+   */
+  | { kind: 'depth'; depth: number; mode: 'system' | 'inline' }
+  /**
+   * The very end: appended to the latest user message, or sent as a new user message if the
+   * chat ends on a reply. The strongest spot for instructions that must be followed now.
+   */
+  | { kind: 'tail' };
+
+/** Where a piece of context came from; drives colours in the context viewer. */
+export type Source = 'system' | 'memory' | 'authors-note' | 'length' | 'lore' | 'summary' | 'user' | 'assistant' | 'other';
 
 export interface ContextBlock {
   id: string;
   label: string;
   text: string;
   placement: Placement;
+  source?: Source;
 }
 
 export interface HistoryItem {
@@ -39,8 +52,32 @@ export interface BuildInput {
   safetyMargin: number;
 }
 
+export interface Part {
+  source: Source;
+  label: string;
+  text: string;
+  tokens: number;
+  messageId?: string;
+}
+
+export interface AnnotatedMessage {
+  role: WireMessage['role'];
+  parts: Part[];
+}
+
+export interface SourceTotal {
+  source: Source;
+  label: string;
+  tokens: number;
+  count: number;
+}
+
 export interface BuildResult {
   messages: WireMessage[];
+  /** Same order as `messages`, split into labelled parts. */
+  annotated: AnnotatedMessage[];
+  /** Token totals per source, in the order each source first appears in the context. */
+  totals: SourceTotal[];
   includedIds: string[];
   droppedIds: string[];
   tokens: { top: number; blocks: number; history: number; total: number; budget: number };
@@ -49,41 +86,82 @@ export interface BuildResult {
 }
 
 const textOf = (c: WireMessage['content']) =>
-  typeof c === 'string' ? c : c.map((p) => (p.type === 'text' ? p.text : '')).join('\n');
+  typeof c === 'string' ? c : c.map((p) => (p.type === 'text' ? p.text : '[image]')).join('\n');
 
 // Images are billed differently per provider; use a flat rough estimate.
 const tokensOf = (c: WireMessage['content']) =>
   estimateTokens(textOf(c)) + (typeof c === 'string' ? 0 : c.filter((p) => p.type === 'image_url').length * 800);
 
+const SOURCE_LABEL: Record<Source, string> = {
+  system: 'System prompt',
+  memory: 'Memory',
+  'authors-note': "Author's Note",
+  length: 'Length instruction',
+  lore: 'Lorebook',
+  summary: 'Story summary',
+  user: 'Your messages',
+  assistant: 'AI replies',
+  other: 'Other',
+};
+export const sourceLabel = (s: Source) => SOURCE_LABEL[s];
+
+const sourceOf = (b: ContextBlock): Source =>
+  b.source ?? (b.id === 'memory' ? 'memory' : b.id === 'authors-note' ? 'authors-note' : b.id === 'length' ? 'length' : 'other');
+
 /** Contributor for the writing toggle: Memory and Author's Note. */
 export function writingBlocks(w: WritingSettings | undefined): ContextBlock[] {
   if (!w?.enabled) return [];
   const out: ContextBlock[] = [];
-  if (w.memory.trim()) out.push({ id: 'memory', label: 'Memory', text: w.memory.trim(), placement: { kind: 'top', order: 10 } });
+  if (w.memory.trim()) out.push({ id: 'memory', label: 'Memory', text: w.memory.trim(), placement: { kind: 'top', order: 10 }, source: 'memory' });
   if (w.authorsNote.trim())
     out.push({
       id: 'authors-note',
       label: "Author's Note",
       text: w.authorsNote.trim(),
-      placement: { kind: 'depth', depth: Math.max(1, Math.floor(w.anDepth || 1)), mode: w.anRole === 'inline' ? 'inline' : 'system' },
+      placement: { kind: 'depth', depth: Math.max(1, Math.floor(w.anDepth || 1)), mode: w.anRole === 'system' ? 'system' : 'inline' },
+      source: 'authors-note',
     });
   return out;
 }
 
-function prependText(c: WireMessage['content'], prefix: string): WireMessage['content'] {
-  if (typeof c === 'string') return `${prefix}\n\n${c}`;
-  return [{ type: 'text', text: prefix }, ...c];
+interface Slot {
+  role: WireMessage['role'];
+  content: WireMessage['content'];
+  parts: Part[];
 }
+
+const join = (a: string, b: string) => (a ? `${a}\n\n${b}` : b);
+
+function prepend(slot: Slot, part: Part): Slot {
+  const c = slot.content;
+  const content = typeof c === 'string' ? join(part.text, c) : [{ type: 'text' as const, text: part.text }, ...c];
+  return { ...slot, content, parts: [part, ...slot.parts] };
+}
+
+function append(slot: Slot, part: Part): Slot {
+  const c = slot.content;
+  const content = typeof c === 'string' ? join(c, part.text) : [...c, { type: 'text' as const, text: part.text }];
+  return { ...slot, content, parts: [...slot.parts, part] };
+}
+
+const mkPart = (source: Source, label: string, text: string, messageId?: string): Part => ({
+  source, label, text, tokens: estimateTokens(text), messageId,
+});
 
 export function buildContext(input: BuildInput): BuildResult {
   const top = input.blocks
     .filter((b): b is ContextBlock & { placement: { kind: 'top'; order: number } } => b.placement.kind === 'top')
     .sort((a, b) => a.placement.order - b.placement.order);
   const depthBlocks = input.blocks.filter((b) => b.placement.kind === 'depth');
+  const tailBlocks = input.blocks.filter((b) => b.placement.kind === 'tail');
 
-  const topText = [input.systemPrompt.trim(), ...top.map((b) => b.text)].filter(Boolean).join('\n\n');
+  const topParts: Part[] = [
+    ...(input.systemPrompt.trim() ? [mkPart('system', 'System prompt', input.systemPrompt.trim())] : []),
+    ...top.map((b) => mkPart(sourceOf(b), b.label, b.text)),
+  ];
+  const topText = topParts.map((p) => p.text).join('\n\n');
   const topTokens = topText ? estimateTokens(topText) + MESSAGE_OVERHEAD : 0;
-  const blockTokens = depthBlocks.reduce((n, b) => n + estimateTokens(b.text) + MESSAGE_OVERHEAD + 8, 0);
+  const blockTokens = [...depthBlocks, ...tailBlocks].reduce((n, b) => n + estimateTokens(b.text) + MESSAGE_OVERHEAD + 8, 0);
   const budget = input.contextLimit - input.maxTokens - input.safetyMargin;
   let room = budget - topTokens - blockTokens;
 
@@ -102,31 +180,69 @@ export function buildContext(input: BuildInput): BuildResult {
   }
   const droppedIds = input.history.slice(0, input.history.length - kept.length).map((h) => h.id);
 
-  const body: WireMessage[] = kept.map((h) => ({ role: h.role, content: h.content }));
+  let body: Slot[] = kept.map((h) => ({
+    role: h.role,
+    content: h.content,
+    parts: [{ ...mkPart(h.role === 'assistant' ? 'assistant' : h.role === 'user' ? 'user' : 'other', h.role === 'assistant' ? 'AI reply' : h.role === 'user' ? 'Your message' : 'System message', textOf(h.content), h.id), tokens: tokensOf(h.content) }],
+  }));
 
   // Blocks at the same depth and mode share one message (strict templates dislike runs of
   // system messages). Insert deepest-first so indices stay valid.
-  const groups = new Map<string, { depth: number; mode: 'system' | 'inline'; texts: string[] }>();
+  const groups = new Map<string, { depth: number; mode: 'system' | 'inline'; parts: Part[] }>();
   for (const blk of depthBlocks) {
     const p = blk.placement as { kind: 'depth'; depth: number; mode: 'system' | 'inline' };
     const key = `${p.depth}|${p.mode}`;
-    const g = groups.get(key) ?? { depth: p.depth, mode: p.mode, texts: [] };
-    g.texts.push(p.mode === 'inline' && !blk.text.startsWith('[') ? `[${blk.label}: ${blk.text}]` : blk.text);
+    const g = groups.get(key) ?? { depth: p.depth, mode: p.mode, parts: [] };
+    const text = p.mode === 'inline' && !blk.text.startsWith('[') ? `[${blk.label}: ${blk.text}]` : blk.text;
+    g.parts.push(mkPart(sourceOf(blk), blk.label, text));
     groups.set(key, g);
   }
+  const lateParts: Part[] = [];
   for (const g of [...groups.values()].sort((a, b) => b.depth - a.depth)) {
     const idx = Math.max(0, body.length - g.depth);
-    const text = g.texts.join('\n\n');
-    if (g.mode === 'inline' && body[idx]) {
-      body[idx] = { ...body[idx], content: prependText(body[idx].content, text) };
+    if (g.mode === 'inline') {
+      // Fold into the first user message at or after that point, never into an AI reply.
+      let at = idx;
+      while (at < body.length && body[at].role !== 'user') at++;
+      if (at < body.length) {
+        let slot = body[at];
+        for (const part of [...g.parts].reverse()) slot = prepend(slot, part);
+        body[at] = slot;
+      } else lateParts.push(...g.parts);
     } else {
-      body.splice(idx, 0, { role: 'system', content: text });
+      body.splice(idx, 0, { role: 'system', content: g.parts.map((p) => p.text).join('\n\n'), parts: g.parts });
     }
   }
 
-  const messages: WireMessage[] = topText ? [{ role: 'system', content: topText }, ...body] : body;
+  // Tail blocks: end of the latest user message, or a new user message after a reply.
+  if (tailBlocks.length || lateParts.length) {
+    const parts = [...lateParts, ...tailBlocks.map((b) => mkPart(sourceOf(b), b.label, b.text))];
+    const last = body.at(-1);
+    if (last?.role === 'user') {
+      let slot = last;
+      for (const part of parts) slot = append(slot, part);
+      body = [...body.slice(0, -1), slot];
+    } else {
+      body.push({ role: 'user', content: parts.map((p) => p.text).join('\n\n'), parts });
+    }
+  }
+
+  const slots: Slot[] = topText ? [{ role: 'system', content: topText, parts: topParts }, ...body] : body;
+
+  const totals: SourceTotal[] = [];
+  for (const s of slots)
+    for (const p of s.parts) {
+      const t = totals.find((x) => x.source === p.source);
+      if (t) {
+        t.tokens += p.tokens;
+        t.count++;
+      } else totals.push({ source: p.source, label: SOURCE_LABEL[p.source], tokens: p.tokens, count: 1 });
+    }
+
   return {
-    messages,
+    messages: slots.map((s) => ({ role: s.role, content: s.content })),
+    annotated: slots.map((s) => ({ role: s.role, parts: s.parts })),
+    totals,
     includedIds: kept.map((h) => h.id),
     droppedIds,
     tokens: { top: topTokens, blocks: blockTokens, history: historyTokens, total: topTokens + blockTokens + historyTokens, budget },

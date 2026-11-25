@@ -24,7 +24,7 @@ describe('buildContext', () => {
   it("inserts the Author's Note just before the latest message at depth 1", () => {
     const r = buildContext({
       systemPrompt: '',
-      blocks: writingBlocks({ ...DEFAULT_WRITING, enabled: true, authorsNote: 'AN', anDepth: 1 }),
+      blocks: writingBlocks({ ...DEFAULT_WRITING, enabled: true, authorsNote: 'AN', anDepth: 1, anRole: 'system' }),
       history: hist(4),
       contextLimit: 32768, maxTokens: 512, safetyMargin: 0,
     });
@@ -40,7 +40,7 @@ describe('buildContext', () => {
       contextLimit: 32768, maxTokens: 512, safetyMargin: 0,
     });
     expect(r.messages).toHaveLength(3);
-    expect(String(r.messages[1].content)).toMatch(/^\[Author's Note: AN\]/);
+    expect(String(r.messages[2].content)).toMatch(/^\[Author's Note: AN\]/); // skips the AI reply at depth 2
   });
 
   it('drops oldest history to fit the budget but keeps the latest message', () => {
@@ -62,15 +62,37 @@ describe('buildContext', () => {
 });
 
 describe('shared depth', () => {
-  it("merges the Author's Note and length instruction into one message", async () => {
+  it('puts the length instruction at the end of the latest user message', async () => {
     const { lengthBlocks } = await import('./length');
     const r = buildContext({
+      systemPrompt: 'SYS',
+      blocks: [...writingBlocks({ ...DEFAULT_WRITING, enabled: true, authorsNote: 'AN' }), ...lengthBlocks('short')],
+      history: hist(3),
+      contextLimit: 32768, maxTokens: 512, safetyMargin: 0,
+    });
+    expect(r.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user']);
+    expect(String(r.messages[3].content)).toMatch(/^\[Author's Note: AN\]\n\nmsg2 x+\n\n\[Length: Reply in about 150 words/);
+    expect(r.annotated[3].parts.map((p) => p.source)).toEqual(['authors-note', 'user', 'length']);
+    expect(r.totals.map((t) => t.source)).toEqual(['system', 'user', 'assistant', 'authors-note', 'length']);
+  });
+
+  it('adds a user message for the length instruction when the chat ends on a reply', async () => {
+    const { lengthBlocks } = await import('./length');
+    const r = buildContext({ systemPrompt: '', blocks: lengthBlocks('scene'), history: hist(2), contextLimit: 32768, maxTokens: 512, safetyMargin: 0 });
+    expect(r.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+    expect(r.annotated[2].parts[0].source).toBe('length');
+  });
+});
+
+describe('inline notes never go into AI replies', () => {
+  it('moves the note to a new user message when the chat ends on a reply', () => {
+    const r = buildContext({
       systemPrompt: '',
-      blocks: [...writingBlocks({ ...DEFAULT_WRITING, enabled: true, authorsNote: 'AN' }), ...lengthBlocks('short', 'system')],
+      blocks: writingBlocks({ ...DEFAULT_WRITING, enabled: true, authorsNote: 'AN', anDepth: 1, anRole: 'inline' }),
       history: hist(2),
       contextLimit: 32768, maxTokens: 512, safetyMargin: 0,
     });
-    expect(r.messages.map((m) => m.role)).toEqual(['user', 'system', 'assistant']);
-    expect(String(r.messages[1].content)).toMatch(/^AN\n\n\[Response length: Keep this response short/);
+    expect(r.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+    expect(r.messages[2].content).toBe("[Author's Note: AN]");
   });
 });

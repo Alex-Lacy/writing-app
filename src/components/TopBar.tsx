@@ -39,7 +39,7 @@ export function TopBar() {
         <div
           className={`meter${stats?.droppedIds.length ? ' warn' : ''}`}
           title={`~${used.toLocaleString()} prompt tokens + ${replyReserve(chat)} kept for the reply, of ${limit.toLocaleString()}${stats?.droppedIds.length ? `. ${stats.droppedIds.length} older messages don't fit.` : ''}`}
-          onClick={() => ui.setPanel('context')}
+          onClick={() => ui.openContext(true)}
         >
           <div className="meter-bar"><div style={{ width: `${pct}%` }} /></div>
           <span>{(used / 1000).toFixed(1)}k/{Math.round(limit / 1000)}k</span>

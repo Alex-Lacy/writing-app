@@ -3,14 +3,14 @@ import { uid } from '../lib/id';
 import { currentChat, saveSettings, ui, updateChat, upsertPreset, useStore } from '../store/store';
 import type { GenParams, WritingSettings } from '../types';
 
-function NumField({ label, value, onChange, step = 0.01, min, max, hint }: {
-  label: string; value: number | undefined; onChange: (v: number | undefined) => void; step?: number; min?: number; max?: number; hint?: string;
+function NumField({ label, value, onChange, step = 0.01, min, max, hint, placeholder = 'default' }: {
+  label: string; value: number | undefined; onChange: (v: number | undefined) => void; step?: number; min?: number; max?: number; hint?: string; placeholder?: string;
 }) {
   return (
     <label className="field num" title={hint}>
       <span>{label}</span>
       <input
-        type="number" step={step} min={min} max={max} placeholder="default"
+        type="number" step={step} min={min} max={max} placeholder={placeholder}
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
       />
@@ -54,7 +54,7 @@ export function ChatSettingsPanel() {
       <section>
         <h3>Generation</h3>
         <div className="grid2">
-          <NumField label="Reply room (tokens)" hint="Always kept free for the reply when older messages are trimmed. Thinking models get at least 6,144." value={chat.params.maxTokens} step={256} min={16} onChange={(v) => setParams({ maxTokens: v ?? 2048 })} />
+          <NumField label="Hard cap (tokens)" hint="Optional safety limit on one reply, thinking included. Leave empty: the Length setting sizes replies, and they can use whatever context is left." value={chat.params.hardCap} placeholder="none" step={256} min={64} onChange={(v) => setParams({ hardCap: v })} />
           <NumField label="Temperature" value={chat.params.temperature} min={0} max={5} onChange={(v) => setParams({ temperature: v })} />
           <NumField label="Top P" value={chat.params.topP} min={0} max={1} onChange={(v) => setParams({ topP: v })} />
           <NumField label="Min P" value={chat.params.minP} min={0} max={1} onChange={(v) => setParams({ minP: v })} />
@@ -63,10 +63,10 @@ export function ChatSettingsPanel() {
           <NumField label="Frequency pen." value={chat.params.frequencyPenalty} min={-2} max={2} onChange={(v) => setParams({ frequencyPenalty: v })} />
           <NumField label="Presence pen." value={chat.params.presencePenalty} min={-2} max={2} onChange={(v) => setParams({ presencePenalty: v })} />
         </div>
-        <label className="switch small" title="Off: replies stop at exactly the Reply room number.">
-          <input type="checkbox" checked={chat.params.autoMaxTokens !== false} onChange={(e) => setParams({ autoMaxTokens: e.target.checked })} />
-          Let replies use all remaining context (recommended, needed for thinking models)
-        </label>
+        <p className="muted small">
+          Reply size comes from the <b>Length</b> option above the message box. Replies may use all the context that is
+          left, so thinking models aren't cut off; set a hard cap only if you want an absolute limit.
+        </p>
         <button className="ghost small" onClick={() => saveSettings({ defaultParams: chat.params })}>Use as default for new chats</button>
       </section>
 
@@ -90,18 +90,18 @@ export function ChatSettingsPanel() {
               <span>Insert depth</span>
               <input type="number" min={1} step={1} value={w.anDepth} onChange={(e) => setW({ anDepth: Math.max(1, Number(e.target.value) || 1) })} />
             </label>
-            <label className="field num" title="System works for most models. Inline folds the note into the next message for models whose templates reject mid-chat system messages (e.g. Gemma, some Mistral).">
+            <label className="field num" title="Inline works with every model. Some models (DeepSeek, for one) move separate system messages to the top of the prompt, which weakens the note.">
               <span>Insert as</span>
               <select value={w.anRole} onChange={(e) => setW({ anRole: e.target.value as WritingSettings['anRole'] })}>
-                <option value="system">System message</option>
-                <option value="inline">Inline [bracketed]</option>
+                <option value="inline">Inside the message (recommended)</option>
+                <option value="system">Separate system message</option>
               </select>
             </label>
           </div>
           <button className="ghost small" onClick={() => saveSettings({ defaultWriting: { ...w, memory: '', authorsNote: '' } })}>Use toggle + AN settings as default</button>
         </fieldset>
       </section>
-      <button className="ghost wide" onClick={() => ui.setPanel('context')}>View exact context sent →</button>
+      <button className="ghost wide" onClick={() => ui.openContext(true)}>View exact context sent →</button>
     </div>
   );
 }
