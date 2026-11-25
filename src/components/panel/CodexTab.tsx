@@ -3,6 +3,7 @@ import { CODEX_SCAN, CODEX_SHARE } from '../../context/codex';
 import { makeReusable, ownBook, setAttached } from '../../store/codexStore';
 import { currentChat, ui, useStore } from '../../store/store';
 import { CodexEditor } from './CodexEditor';
+import { LorebookImport } from './LorebookImport';
 
 export function CodexTab() {
   const chat = useStore((s) => currentChat(s));
@@ -29,6 +30,7 @@ export function CodexTab() {
             if (name) void makeReusable(chat, name);
           }}>Make reusable…</button>
         )}
+        <LorebookImport chat={chat} />
       </section>
 
       {attached.map((b) => (

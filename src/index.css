@@ -341,3 +341,14 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 .jump-latest { position: sticky; bottom: 10px; margin: 0 auto; display: block; width: fit-content; z-index: 5; font-size: 12px; padding: 4px 12px; border-radius: 999px; background: var(--bg2); border: 1px solid var(--line); box-shadow: 0 2px 8px rgb(0 0 0 / .25); }
 .helper-input .jump-latest { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); }
+.lore-import { margin-top: 8px; }
+.lore-list { max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; margin: 6px 0; }
+.lore-cat { display: flex; align-items: center; gap: 6px; margin: 8px 0 2px; }
+.lore-entry { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.lore-entry:last-child { border-bottom: none; }
+.lore-entry input { margin-top: 3px; }
+.lore-text { display: block; }
+.tag-dupe { font-size: 11px; color: var(--accent); }
+.lore-import input[type=checkbox] { width: auto; flex: none; }
+.lore-entry > span { flex: 1; min-width: 0; }
+.lore-cat { justify-content: flex-start; }

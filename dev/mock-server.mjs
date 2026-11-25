@@ -29,6 +29,10 @@ http.createServer(async (req, res) => {
     res.end('data: [DONE]\n\n');
   };
   // Side jobs, recognised by their system prompts.
+  if (sys.includes('You tidy Codex entries')) {
+    const first = String(last.content).match(/^## (.+)$/m)?.[1];
+    return reply(first ? JSON.stringify([{ type: 'codex-edit', entry: first, text: `${first}, tidied.`, keys: [first], reason: 'removed leftover brackets' }]) : '[]');
+  }
   if (sys.includes('maintain the notes for a piece of fiction'))
     return reply(JSON.stringify({ suggestions: [{ type: 'codex-add', name: 'Captain Rell', keys: ['Rell', 'captain'], text: 'Harbour captain; owes Mara a favour.', reason: 'New recurring character.' }] }));
   if (sys.includes('You write recaps of a story'))
