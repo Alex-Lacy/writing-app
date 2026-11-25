@@ -1,0 +1,8 @@
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
+
+marked.setOptions({ gfm: true, breaks: true });
+
+export function renderMarkdown(src: string): string {
+  return DOMPurify.sanitize(marked.parse(src, { async: false }) as string);
+}
