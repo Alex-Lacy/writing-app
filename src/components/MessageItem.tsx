@@ -1,7 +1,7 @@
 import { memo, useMemo, useRef, useState } from 'react';
 import { renderMarkdown } from '../lib/markdown';
 import {
-  ui, continueReply, deleteFrom, deleteMessage, deleteSwipe, editMessage, modelLabel, regenerate, swipe, useStore,
+  ui, continueReply, duplicateChat, deleteFrom, deleteMessage, deleteSwipe, editMessage, modelLabel, regenerate, swipe, useStore,
 } from '../store/store';
 import { activeSwipe, type Message } from '../types';
 import { ClicheChip, MessageCards, RewriteBox } from './MessageTools';
@@ -120,6 +120,7 @@ export const MessageItem = memo(function MessageItem({ m, isLast, outOfContext }
           <button className="ghost" onClick={startEdit} disabled={busy}>Edit</button>
           {m.role !== 'system' && <button className="ghost" onClick={() => ui.openRewrite({ messageId: m.id })} disabled={busy} title="Rewrite with your feedback, or proofread. Highlight text to work on just part of it.">Rewrite</button>}
           <button className="ghost" onClick={() => regenerate(m.id)} disabled={busy} title={m.role === 'assistant' ? 'New version of this reply' : 'Regenerate the reply to this'}>Retry</button>
+          {!isLast && <button className="ghost" onClick={() => duplicateChat(m.chatId, m.id)} disabled={busy} title="Copy the story up to here into a new chat, to try a different direction">Branch</button>}
           {m.swipes.length > 1 && <button className="ghost" onClick={() => deleteSwipe(m.id)} disabled={busy}>Delete version</button>}
           <button className="ghost" onClick={() => deleteMessage(m.id)} disabled={busy}>Delete</button>
           {!isLast && (

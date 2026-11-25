@@ -246,10 +246,11 @@ export async function updateChat(patch: Partial<Chat>, id = get().currentChatId)
   await repo.put('chats', next);
 }
 
-export async function duplicateChat(id: string) {
+/** Copies a story (its setup, own Codex and messages). With `upTo`, only up to that message: a branch. */
+export async function duplicateChat(id: string, upTo?: string) {
   const src = get().chats.find((c) => c.id === id);
   if (!src) return;
-  const chat: Chat = { ...structuredClone(src), id: uid(), num: await takeChatNum(), title: `${src.title} (copy)`, createdAt: Date.now(), updatedAt: Date.now() };
+  const chat: Chat = { ...structuredClone(src), id: uid(), num: await takeChatNum(), title: `${src.title} (${upTo ? 'branch' : 'copy'})`, createdAt: Date.now(), updatedAt: Date.now() };
   const own = get().codex.find((b) => b.id === src.codexId);
   if (own) {
     const copy: CodexBook = { ...structuredClone(own), id: uid(), chatId: chat.id, createdAt: Date.now(), updatedAt: Date.now() };
@@ -258,11 +259,14 @@ export async function duplicateChat(id: string) {
     chat.codexId = copy.id;
   }
   const idMap = new Map<string, string>();
-  for (const m of await repo.messages(id)) {
+  const all = await repo.messages(id);
+  const cut = upTo ? all.findIndex((m) => m.id === upTo) + 1 : all.length;
+  for (const m of all.slice(0, cut || all.length)) {
     idMap.set(m.id, uid());
     await repo.put('messages', { ...structuredClone(m), id: idMap.get(m.id)!, chatId: chat.id });
   }
-  if (chat.summary) chat.summary = chat.summary.map((p) => ({ ...p, id: uid(), messageIds: p.messageIds.map((x) => idMap.get(x) ?? x) }));
+  if (chat.summary) chat.summary = chat.summary.filter((p) => p.messageIds.every((x) => idMap.has(x))).map((p) => ({ ...p, id: uid(), messageIds: p.messageIds.map((x) => idMap.get(x)!) }));
+  chat.checkedUpTo = chat.checkedUpTo && idMap.get(chat.checkedUpTo);
   await repo.put('chats', chat);
   set({ chats: sortChats([chat, ...get().chats]) });
   await selectChat(chat.id);

@@ -13,7 +13,7 @@ vi.mock('../providers/openai', async (orig) => ({
   },
 }));
 
-const { useStore, newChat, send, continueReply, deleteChat, selectChat, updateChat, SAVE_EVERY_MS, withAttachments } = await import('./store');
+const { useStore, newChat, send, continueReply, deleteChat, selectChat, updateChat, SAVE_EVERY_MS, withAttachments, insertMessage, duplicateChat } = await import('./store');
 const { repo } = await import('../db/db');
 
 const words = (text: string): (() => AsyncGenerator<StreamEvent>) => async function* () {
@@ -143,5 +143,20 @@ describe('attachments', () => {
   });
   it('tells other models an image was left out', () => {
     expect(withAttachments('', atts, false)).toContain('[Image attached earlier: map.jpg, not sent with this request]');
+  });
+});
+
+describe('branch', () => {
+  it('copies the story up to the chosen message into a new chat', async () => {
+    const c = await newChat();
+    await insertMessage('user', 'one');
+    await insertMessage('assistant', 'two');
+    await insertMessage('user', 'three');
+    const second = useStore.getState().messages[1];
+    await duplicateChat(c.id, second.id);
+    const s = useStore.getState();
+    expect(s.currentChatId).not.toBe(c.id);
+    expect(s.chats.find((x) => x.id === s.currentChatId)?.title).toContain('(branch)');
+    expect(s.messages.map((m) => m.swipes[0].content)).toEqual(['one', 'two']);
   });
 });
