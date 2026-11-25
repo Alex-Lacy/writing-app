@@ -1,60 +1,50 @@
 # Architecture
 
 Single-page React + TypeScript app built with Vite. No backend: the browser calls the provider
-directly (Featherless sends CORS headers, verified from a browser), and all data lives in IndexedDB.
+directly (Featherless sends CORS headers), and all data lives in IndexedDB on the device.
 
 ```
 src/
-  types.ts               data model (Chat, Message with swipes, ModelEntry, ProviderConfig, settings)
-  db/db.ts               IndexedDB (idb): kv, providers, models, presets, chats, messages; export/import
-  providers/openai.ts    generic OpenAI-compatible client: listModels (paginated), streamChat (SSE), complete()
-  providers/thinkSplitter.ts   splits inline <think> blocks out of streamed content
+  types.ts               data model: Chat, Message (with swipes), Codex, Suggestion, Style modules, settings
+  db/db.ts               IndexedDB (idb) with numbered MIGRATIONS; export/import (keys excluded)
+  providers/openai.ts    OpenAI-compatible client: listModels, streamChat (SSE), friendly errors
+  providers/thinkSplitter.ts   splits inline <think> blocks out of streamed text
   context/build.ts       context pipeline: ContextBlocks + history -> messages within the token budget
-  context/tokens.ts      token estimate (pluggable; swap for a real tokenizer later)
-  store/store.ts         zustand store + all actions (send, generate, swipe, edit, delete...)
-  components/            UI
-  tools/                 Phase 2+ tools (each self-contained)
+  context/codex.ts       Codex triggers, and the blocks for Global notes, Style modules, Story tags, summary
+  context/tokens.ts      token estimate, calibrated from the provider's real usage numbers
+  ai/jobs.ts             side jobs (Helper, updates, summary, Proofread, rewrites, Cliché Filter):
+                         one at a time, per-job models, retries on 429, always yield to the story reply
+  store/store.ts         zustand store and core actions (send, generate, swipe, edit, delete), reply hooks
+  store/suggestions.ts   suggestion cards: accept / edit / reject / undo for every kind of change
+  store/codexStore.ts    Codex books: each story's own book, shared books in the Library
+  features/              helper, updates, summary, rewrite (Rewrite + Proofread), compile (Export),
+                         filter/ (Cliché Filter rules, scanning, fixes), starters (built-in Helpers, Style modules)
+  components/            UI; components/panel/ is the Story panel (Setup, Codex, Helper, Cliché Filter, Suggestions)
 ```
 
 ## Key decisions
 
-- **Messages hold swipes.** Each message has `swipes[]` + `activeSwipe`. Retry on an assistant message adds a
-  swipe; Retry on a user message adds a swipe to the reply after it. Only the active swipe goes into context.
-- **Context is a pipeline of blocks.** Anything injected (Memory, Author's Note, later lorebook entries, the
-  condensed summary, search results) is a `ContextBlock` with a placement: `top` (merged into the single
-  leading system message, ordered) or `depth` (N messages from the end, as a system message or inline).
-  History is fitted newest-first under `contextLimit - maxTokens - safetyMargin`. The builder returns what it
-  dropped, which drives the "out of context" greying and will trigger auto-condense.
-- **Author's Note "inline" mode** exists because some chat templates (Gemma, strict Mistral) reject a system
-  message mid-conversation or require strict user/assistant alternation.
-- **Provider-agnostic.** Optional sampler params are only sent when set. Unknown fields from `/models`
-  (context_length, features.image_input) are read when present.
-
-## Phase 2 plan
-
-- **Lorebook** (`tools/lorebook/`): new `lorebooks` + `loreEntries` stores (keys, regex flag, content,
-  insertion order/depth, always-on, enabled). Contributor scans the last N messages for keys and returns
-  blocks with `top` or `depth` placement. Chat gets `writing.lorebookIds`. Proposed updates: a `complete()`
-  call that returns JSON diffs, shown as accept/reject cards.
-- **Auto-condense** (`tools/condense/`): when `buildContext` reports dropped messages (or usage > ~85%),
-  summarise the oldest un-condensed span with `complete()`, store it on `chat.summary`, mark those messages
-  `condensed`, and inject the summary as a `top` block after Memory. Reversible (un-condense).
-- **Compile** (`tools/compile/`): pick messages (default: assistant swipes), strip OOC/instructions with a
-  model pass, add chapter headings, optional proofread pass, export Markdown/DOCX.
-- **Slop Slayer** (`tools/slopSlayer/`): port of the NAI script v1.1.6.
-  - `rules.ts`: parse the rule format (`#! [id] description` line, then `/regex/flags`) and word lists
-    (`NAME== a|b|c`, nested `%NAME%` expansion), compile, report failures. Ship the script's DEFAULT_RULES and
-    DEFAULT_WORDLISTS; user rules add to them; rules can be disabled by id.
-  - `scan.ts`: run rules over a message, return spans `{ruleId, from, to}`; sentence expansion for rewrites.
-  - Modes per chat: Manual / Highlight (scan after each generation, mark spans in MessageItem) / Supervised
-    (propose replacements in a review list) / Auto (rewrite up to a limit). AI rewrite uses `complete()` with
-    the surrounding sentence as context. Per-rule hit stats.
-  - Hook: `generate()` gets a post-generation hook list; Slop Slayer registers one. MessageItem gets a
-    decorator pass for highlights.
+- **Messages hold swipes.** Each message has `swipes[]` + `activeSwipe`; only the active one is sent.
+- **Context is a pipeline of blocks.** Everything injected is a `ContextBlock` with a placement: `top`
+  (one leading system message, ordered: Global notes 5, Background 10, Style modules 12, Story tags 15,
+  Codex 20, Story so far 30), `depth` (Steering, N messages from the end, as a system message or inline) or
+  `tail` (Length). History is fitted newest-first; the builder reports what it dropped.
+- **Every AI change is a card.** The Helper, suggested updates, auto-summary, Proofread, Rewrite and the
+  Cliché Filter all produce `Suggestion`s with before/after. Nothing changes the story or notes until the
+  person accepts (Cliché Filter Auto mode and later summary parts accept themselves, and stay undoable).
+  Passage cards store offsets; accepting one shifts the others in the same message, and a card whose text
+  was edited meanwhile says so instead of guessing.
+- **The Helper speaks a text protocol**, not native tool calls: its reply ends with a ```changes JSON block.
+  Works with any model, has no step limit, and every change is reviewable.
+- **Side jobs never block the story.** Background jobs (updates, summary, filter) are stopped when a reply
+  starts; Helper/Proofread/Rewrite are allowed to finish first ("Waiting for…" in the composer). This matters
+  on Featherless, where one large model uses the whole concurrency allowance.
+- **Rewrites see the story around the passage** (before/after text, setup, triggered Codex, summary of
+  earlier parts), even for parts already summarised: originals are never deleted.
+- **After-reply hooks** (`replyHooks`): suggested updates (every ~1,500 new words by default), auto-summary
+  (at 85% of the context), Cliché Filter (Suggest/Auto modes).
 
 ## Phase 3 plan
 
-Image/file attachments (`Message.attachments`, sent as `image_url` parts for models with `vision`), web search
-tool (Tavily/Brave/SearXNG key in settings, exposed as a narrow tool alongside lorebook/memory read/update),
-service worker for offline install, and sync (every record already has an id and timestamps; candidates are a
-small sync server, or a file in the user's cloud drive).
+Image attachments for vision models, web search for the Helper, service worker for offline install, and sync
+(every record already has an id and timestamps).

@@ -4,7 +4,8 @@ import { uid } from '../lib/id';
 import { friendlyError, listModelsPage, PAGE_SIZE, type RemoteModel } from '../providers/openai';
 import { recommendedFor, type RecommendedModel } from '../providers/recommended';
 import { ModelBadges } from './ModelBadges';
-import type { AppSettings, ModelEntry, Theme } from '../types';
+import type { AppSettings, Job, ModelEntry, Theme } from '../types';
+import { JOB_LABEL } from '../ai/jobs';
 
 const listCache = new Map<string, RemoteModel[]>();
 import {
@@ -271,7 +272,35 @@ function General() {
       <p className="msg-body" style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 12px' }}>
         Rain hammered the tin roofs as Mara stepped onto the pier. “You’re the detective,” he said.
       </p>
+      <JobModelsSection />
     </div>
+  );
+}
+
+/** Advanced: a different model for each side job. Most people never need this. */
+function JobModelsSection() {
+  const s = useStore((x) => x.settings);
+  const models = useStore((x) => x.models);
+  const jm = s.jobModels ?? {};
+  const set = (job: Job, key: string) => saveSettings({ jobModels: { ...jm, [job]: key || undefined } });
+  return (
+    <details>
+      <summary>Advanced: models for side jobs</summary>
+      <p className="muted small">
+        On Featherless the defaults are DeepSeek V4 Pro for the Helper and Proofread, DeepSeek V4.1 Flash for
+        updates, summaries and the Cliché Filter, and your story model for rewrites. Elsewhere, everything uses the story model.
+      </p>
+      <div className="grid2">
+        {(Object.keys(JOB_LABEL) as Job[]).map((job) => (
+          <label key={job} className="field small"><span>{JOB_LABEL[job]}</span>
+            <select value={jm[job] ?? ''} onChange={(e) => set(job, e.target.value)}>
+              <option value="">Default</option>
+              {models.map((m) => <option key={m.key} value={m.key}>{m.nickname || m.modelId}</option>)}
+            </select>
+          </label>
+        ))}
+      </div>
+    </details>
   );
 }
 
