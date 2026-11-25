@@ -1,6 +1,6 @@
 // Per-message writing tools: Cliché Filter marks, the Rewrite / Proofread box, and the
 // suggestion cards for edits to this message, shown right under it.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { fixCliches } from '../features/filter/filter';
 import { locate } from './messageHooks';
 import type { Hit } from '../features/filter/rules';
@@ -57,7 +57,13 @@ export function RewriteBox({ m }: { m: Message }) {
   const [feedback, setFeedback] = useState('');
   const [busy, setBusy] = useState<'' | 'rewrite' | 'proofread'>('');
   const [note, setNote] = useState('');
-  if (!target || target.messageId !== m.id || !chatId) return null;
+  const open = !!target && target.messageId === m.id;
+  // Bring the box into view (on phones it can open below the fold). Braces: no return value.
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (open) box.current?.scrollIntoView({ block: 'nearest' });
+  }, [open]);
+  if (!target || !open || !chatId) return null;
   const content = activeSwipe(m).content;
   const part = target.from !== undefined && target.to !== undefined ? { from: target.from, to: target.to } : undefined;
   const quote = part ? content.slice(part.from, part.to) : '';
@@ -86,11 +92,11 @@ export function RewriteBox({ m }: { m: Message }) {
   };
 
   return (
-    <div className="rewrite-box">
+    <div className="rewrite-box" ref={box}>
       {quote && <blockquote className="rewrite-quote">{quote.length > 400 ? `${quote.slice(0, 400)}…` : quote}</blockquote>}
       <textarea
-        autoFocus rows={2} value={feedback} onChange={(e) => setFeedback(e.target.value)}
-        placeholder={part ? 'What should change? e.g. “less flowery”, “make her angrier”' : 'What should change? e.g. “slower, more dialogue”. The rewrite becomes a new version.'}
+        autoFocus rows={3} value={feedback} onChange={(e) => setFeedback(e.target.value)}
+        placeholder={part ? 'What should change? e.g. “less flowery”, “make her angrier”' : 'What should change? e.g. “slower, more dialogue”. Becomes a new version.'}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
