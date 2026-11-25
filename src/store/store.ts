@@ -49,6 +49,7 @@ interface State {
   lastContext?: BuildResult;
   /** Message (or highlighted part of one) the Rewrite box is open for. */
   rewriteTarget?: RewriteTarget;
+  compileOpen: boolean;
 }
 
 export interface RewriteTarget { messageId: string; from?: number; to?: number }
@@ -77,6 +78,7 @@ export const useStore = create<State>()(() => ({
   settingsTab: 'providers',
   contextOpen: false,
   libraryOpen: false,
+  compileOpen: false,
   focus: false,
 }));
 
@@ -650,4 +652,5 @@ export const ui = {
   openLibrary: (open: boolean) => set({ libraryOpen: open, sidebarOpen: false }),
   clearError: () => set({ error: undefined }),
   openRewrite: (t?: RewriteTarget) => set({ rewriteTarget: t }),
+  openCompile: (open: boolean) => set({ compileOpen: open }),
 };

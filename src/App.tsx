@@ -3,6 +3,7 @@ import { ChatView } from './components/ChatView';
 import { ContextModal } from './components/ContextModal';
 import { SettingsModal } from './components/SettingsModal';
 import { LibraryModal } from './components/LibraryModal';
+import { CompileModal } from './components/CompileModal';
 import { Sidebar } from './components/Sidebar';
 import { StoryPanel } from './components/panel/StoryPanel';
 import './features/updates';
@@ -17,6 +18,7 @@ export default function App() {
   const settingsOpen = useStore((s) => s.settingsOpen);
   const contextOpen = useStore((s) => s.contextOpen);
   const libraryOpen = useStore((s) => s.libraryOpen);
+  const compileOpen = useStore((s) => s.compileOpen);
   const theme = useStore((s) => s.settings.theme);
 
   useEffect(() => { void init(); }, []);
@@ -60,6 +62,7 @@ export default function App() {
       {contextOpen && <ContextModal />}
       {settingsOpen && <SettingsModal />}
       {libraryOpen && <LibraryModal />}
+      {compileOpen && <CompileModal />}
     </div>
   );
 }

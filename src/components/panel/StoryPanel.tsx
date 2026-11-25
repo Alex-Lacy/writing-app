@@ -24,6 +24,7 @@ export function StoryPanel() {
       <header className="panel-head">
         <b>#{chat.num} Story panel</b>
         <span className="spacer" />
+        <button className="small" onClick={() => ui.openCompile(true)} title="Turn the story into a clean manuscript: copy it, or save as Word, Markdown or text">Export</button>
         <button className="small" onClick={() => ui.openContext(true)} title="See exactly what gets sent to the model, in order">View context</button>
         <button className="icon" onClick={() => ui.setPanel('none')} title="Close">✕</button>
       </header>
