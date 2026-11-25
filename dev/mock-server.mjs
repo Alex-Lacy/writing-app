@@ -3,8 +3,31 @@
 import http from 'node:http';
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
 let lastBody = null;
+const ntfy = {};
+const listeners = [];
 http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return res.writeHead(204, cors).end();
+  // A tiny ntfy stand-in for sync pairing tests: POST /ntfy/<topic>, GET /ntfy/<topic>/sse.
+  if (req.url.startsWith('/ntfy/')) {
+    const [path] = req.url.split('?');
+    const topic = path.split('/')[2];
+    const list = (ntfy[topic] ??= []);
+    if (req.method === 'POST') {
+      let body = '';
+      for await (const c of req) body += c;
+      const m = { id: Math.random().toString(36).slice(2), time: Date.now() / 1000, event: 'message', topic, message: body };
+      list.push(m);
+      for (const l of listeners.filter((x) => x.topic === topic)) l.res.write(`data: ${JSON.stringify(m)}\n\n`);
+      return res.writeHead(200, { ...cors, 'Content-Type': 'application/json' }).end(JSON.stringify(m));
+    }
+    res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
+    res.write(`data: ${JSON.stringify({ event: 'open', topic })}\n\n`);
+    for (const m of list) res.write(`data: ${JSON.stringify(m)}\n\n`);
+    const l = { topic, res };
+    listeners.push(l);
+    req.on('close', () => listeners.splice(listeners.indexOf(l), 1));
+    return;
+  }
   if (req.url.endsWith('/last')) return res.writeHead(200, { ...cors, 'Content-Type': 'application/json' }).end(JSON.stringify(lastBody, null, 2));
   if (req.url.split('?')[0].endsWith('/models'))
     return res.writeHead(200, { ...cors, 'Content-Type': 'application/json' }).end(JSON.stringify({ data: [

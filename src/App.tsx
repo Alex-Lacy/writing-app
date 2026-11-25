@@ -4,6 +4,7 @@ import { ContextModal } from './components/ContextModal';
 import { SettingsModal } from './components/SettingsModal';
 import { LibraryModal } from './components/LibraryModal';
 import { CompileModal } from './components/CompileModal';
+import { SyncModal } from './components/SyncModal';
 import { Sidebar } from './components/Sidebar';
 import { StoryPanel } from './components/panel/StoryPanel';
 import './features/updates';
@@ -19,6 +20,7 @@ export default function App() {
   const contextOpen = useStore((s) => s.contextOpen);
   const libraryOpen = useStore((s) => s.libraryOpen);
   const compileOpen = useStore((s) => s.compileOpen);
+  const syncOpen = useStore((s) => s.syncOpen);
   const theme = useStore((s) => s.settings.theme);
 
   useEffect(() => { void init(); }, []);
@@ -63,6 +65,7 @@ export default function App() {
       {settingsOpen && <SettingsModal />}
       {libraryOpen && <LibraryModal />}
       {compileOpen && <CompileModal />}
+      {syncOpen && <SyncModal />}
     </div>
   );
 }

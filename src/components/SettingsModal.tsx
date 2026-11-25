@@ -383,7 +383,15 @@ function Data() {
   };
   const importAll = async (f: File) => {
     try {
-      await repo.importAll(JSON.parse(await f.text()));
+      const j = JSON.parse(await f.text());
+      const { isStoryFile, importStoryFile } = await import('../sync/storyFile');
+      if (isStoryFile(j)) {
+        const title = await importStoryFile(j, (t) => confirm(`You already have “${t}”. Replace it with the file's version? (Cancel adds the file's version as a copy.)`));
+        await init(true);
+        setMsg(`✓ Imported “${title}”.`);
+        return;
+      }
+      await repo.importAll(j);
       await init(true);
       setMsg('✓ Imported.');
     } catch (e) {
@@ -392,11 +400,11 @@ function Data() {
   };
   return (
     <div>
-      <p className="muted small">Everything is stored on this device, in this browser. Nothing is sent anywhere except the requests to your AI provider. Export a backup now and then: it's also how you move your stories to another device. API keys are not included.</p>
+      <p className="muted small">Everything is stored on this device, in this browser. Nothing is sent anywhere except the requests to your AI provider. Export a backup now and then. To move stories between your phone and computer, use ⇄ Sync devices in the sidebar; to send one story, use Export → Story file. API keys are never included.</p>
       <StorageStatus />
       <div className="row">
         <button onClick={exportAll}>Export backup</button>
-        <label className="button ghost">Import backup<input type="file" accept="application/json" hidden onChange={(e) => e.target.files?.[0] && importAll(e.target.files[0])} /></label>
+        <label className="button ghost" title="A full backup, or a single story file (.story.json)">Import backup or story<input type="file" accept="application/json" hidden onChange={(e) => e.target.files?.[0] && importAll(e.target.files[0])} /></label>
       </div>
       {msg && <p className="small">{msg}</p>}
     </div>

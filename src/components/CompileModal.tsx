@@ -45,6 +45,7 @@ export function CompileModal() {
             <button className="ghost" onClick={() => download(fileName(title, 'md'), markdown, 'text/markdown')}>Markdown</button>
             <button className="ghost" onClick={() => download(fileName(title, 'txt'), toPlainText(markdown))}>Text</button>
             <button className="ghost" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
+            {chat && <button className="ghost" title="The whole story with its setup, Codex and Helper chats, to open in Writing Studio on another device (Settings → Data → Import)" onClick={() => void import('../sync/storyFile').then((m) => m.saveStoryFile(chat.id))}>Story file</button>}
             <span className="muted small">{words.toLocaleString()} words</span>
           </div>
           <StoryProofSection include={o.include} onReview={() => { close(); ui.openPanel('suggestions'); }} />

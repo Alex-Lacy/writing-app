@@ -305,6 +305,8 @@ export interface AppSettings {
   globalNotes?: string;
   /** Optional web search proxy (see worker/README.md); wikis work without it. */
   searchProxy?: string;
+  /** Pairing relay for device sync (an ntfy server); ntfy.sh when unset. */
+  syncRelay?: string;
   /** Per-job model overrides (Settings, Models, Advanced). */
   jobModels?: JobModels;
   /** Defaults for new chats. */

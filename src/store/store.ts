@@ -50,6 +50,7 @@ interface State {
   /** Message (or highlighted part of one) the Rewrite box is open for. */
   rewriteTarget?: RewriteTarget;
   compileOpen: boolean;
+  syncOpen: boolean;
   /** Shown while a reply waits for a Helper or Proofread job to finish. */
   waiting?: string;
   /** A Helper reply in progress (kept here so closing the panel doesn't lose it), or its error. */
@@ -88,6 +89,7 @@ export const useStore = create<State>()(() => ({
   contextOpen: false,
   libraryOpen: false,
   compileOpen: false,
+  syncOpen: typeof location !== 'undefined' && /pair=/.test(location.hash),
   focus: false,
 }));
 
@@ -285,6 +287,7 @@ export async function duplicateChat(id: string, upTo?: string) {
 }
 
 export async function deleteChat(id: string) {
+  void import('../sync/units').then((u) => u.noteGone(id));
   // Drop it from state first: a reply still streaming checks this and skips its saves.
   const chats = get().chats.filter((c) => c.id !== id);
   set({ chats, codex: get().codex.filter((b) => b.chatId !== id) });
@@ -735,4 +738,5 @@ export const ui = {
   clearError: () => set({ error: undefined }),
   openRewrite: (t?: RewriteTarget) => set({ rewriteTarget: t }),
   openCompile: (open: boolean) => set({ compileOpen: open }),
+  openSync: (open: boolean) => set({ syncOpen: open }),
 };

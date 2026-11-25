@@ -30,6 +30,7 @@ export function Sidebar() {
         </nav>
         <div className="sidebar-bottom">
           <button className="ghost wide" onClick={() => ui.openLibrary(true)}>📚 Library</button>
+          <button className="ghost wide" onClick={() => ui.openSync(true)} title="Copy stories between your phone and computer">⇄ Sync devices</button>
           <button className="ghost wide" onClick={() => ui.openSettings(true)}>⚙ Settings</button>
         </div>
       </aside>

@@ -356,3 +356,15 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .helper-lookups summary { cursor: pointer; }
 .helper-lookups ul { margin: 4px 0; padding-left: 18px; }
 .lookup-text { white-space: pre-wrap; max-height: 240px; overflow-y: auto; background: var(--bg); padding: 6px; border-radius: 6px; color: var(--muted); }
+.sync-start { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+@media (max-width: 640px) { .sync-start { grid-template-columns: 1fr; } }
+.sync-start .card { display: flex; flex-direction: column; gap: 8px; }
+.sync-code { text-align: center; }
+.qr { width: 220px; max-width: 70vw; margin: 0 auto; background: #fff; border-radius: 8px; }
+.qr svg { display: block; width: 100%; height: auto; }
+.sync-code .code { font: 600 24px ui-monospace, Menlo, monospace; letter-spacing: 2px; margin: 8px 0; }
+.sync-list { display: grid; gap: 6px; margin: 8px 0; max-height: 50vh; overflow-y: auto; }
+.sync-item { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }
+.sync-item.conflict { display: block; border-color: var(--accent); }
+.sync-step { font-size: 12px; white-space: nowrap; color: var(--accent); min-width: 96px; }
+.scanner { width: 100%; max-height: 240px; border-radius: 8px; background: #000; }

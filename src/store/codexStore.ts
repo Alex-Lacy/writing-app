@@ -56,6 +56,7 @@ export async function makeReusable(chat: Chat, name: string, series?: string) {
 }
 
 export async function deleteSharedBook(id: string) {
+  void import('../sync/units').then((u) => u.noteGone(id));
   set({ codex: get().codex.filter((b) => b.id !== id) });
   await repo.del('codex', id);
   for (const c of get().chats.filter((c) => c.sharedCodexIds?.includes(id))) await updateChat({ sharedCodexIds: c.sharedCodexIds!.filter((x) => x !== id) }, c.id);

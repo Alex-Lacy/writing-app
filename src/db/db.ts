@@ -111,6 +111,38 @@ export const repo = {
     await Promise.all(del);
     await tx.done;
   },
+  async kvGet<T>(key: string): Promise<T | undefined> {
+    return (await (await db()).get('kv', key)) as T | undefined;
+  },
+  async kvPut(key: string, v: unknown) {
+    await (await db()).put('kv', v, key);
+  },
+  /** Sync: replaces a story (chat, messages, own Codex, Helper conversations) with another copy, in one go. */
+  async replaceStory(u: { chat: Chat; messages: Message[]; book?: CodexBook; threads: HelperThread[] }) {
+    const d = await db();
+    const tx = d.transaction(['chats', 'messages', 'helperThreads', 'codex'], 'readwrite');
+    const keep = new Set(u.messages.map((m) => m.id));
+    for (const k of await tx.objectStore('messages').index('byChat').getAllKeys(u.chat.id)) if (!keep.has(k)) await tx.objectStore('messages').delete(k);
+    const threads = new Set(u.threads.map((t) => t.id));
+    for (const k of await tx.objectStore('helperThreads').index('byChat').getAllKeys(u.chat.id)) if (!threads.has(k)) await tx.objectStore('helperThreads').delete(k);
+    await tx.objectStore('chats').put(normalizeChat(u.chat));
+    for (const m of u.messages) await tx.objectStore('messages').put(m);
+    for (const t of u.threads) await tx.objectStore('helperThreads').put(t);
+    if (u.book) await tx.objectStore('codex').put(u.book);
+    await tx.done;
+  },
+  /** Undo for sync: puts every story, message, Codex book and conversation back as they were. */
+  async restoreStories(data: BackupData) {
+    const d = await db();
+    const tx = d.transaction(['chats', 'messages', 'codex', 'suggestions', 'helperThreads'], 'readwrite');
+    for (const st of ['chats', 'messages', 'codex', 'suggestions', 'helperThreads'] as const) await tx.objectStore(st).clear();
+    for (const c of data.chats ?? []) await tx.objectStore('chats').put(c);
+    for (const m of data.messages ?? []) await tx.objectStore('messages').put(m);
+    for (const b of data.codex ?? []) await tx.objectStore('codex').put(b);
+    for (const x of data.suggestions ?? []) await tx.objectStore('suggestions').put(x);
+    for (const h of data.helperThreads ?? []) await tx.objectStore('helperThreads').put(h);
+    await tx.done;
+  },
   async exportAll(): Promise<BackupData> {
     const d = await db();
     return {
