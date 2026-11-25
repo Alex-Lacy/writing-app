@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { repo } from '../db/db';
 import { buildContext, writingBlocks, type BuildResult, type HistoryItem } from '../context/build';
-import { streamChat, type WireMessage } from '../providers/openai';
+import { friendlyError, streamChat, type WireMessage } from '../providers/openai';
 import {
   activeSwipe, DEFAULT_SETTINGS, FEATHERLESS_PRESET,
   type AppSettings, type Chat, type Message, type ModelEntry, type Preset, type ProviderConfig, type Swipe,
@@ -290,10 +290,9 @@ export async function generate(targetId?: string) {
   } catch (e) {
     const aborted = (e as Error).name === 'AbortError';
     if (!aborted) {
-      const msg = (e as Error).message || String(e);
-      const hint = msg === 'Failed to fetch' ? ' (network or CORS error; check the base URL)' : '';
-      swipe = { ...swipe, error: msg + hint };
-      set({ error: msg + hint });
+      const msg = friendlyError(e, provider.name);
+      swipe = { ...swipe, error: msg };
+      set({ error: msg });
     } else swipe = { ...swipe, finishReason: 'stopped' };
   } finally {
     paint(true);

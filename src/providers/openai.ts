@@ -74,26 +74,31 @@ async function fetchModelPage(p: ProviderConfig, query: string, signal?: AbortSi
   return Array.isArray(j) ? j : (j.data ?? []);
 }
 
+export const PAGE_SIZE = 1000;
+
 /**
- * Lists models. Some providers (Featherless) paginate /models; we ask for large pages and keep
- * going while new ids appear. Providers that ignore the query params just return the same list,
- * which stops the loop after one extra request.
+ * Lists one page of models. Featherless paginates /models (50 by default), so we ask for big
+ * pages; providers that ignore the params just return everything. Fetch one page at a time so
+ * we never burst requests (Featherless rate-limits, and a 429 arrives without CORS headers,
+ * which the browser reports as a bare network error).
  */
-export async function listModels(p: ProviderConfig, signal?: AbortSignal): Promise<RemoteModel[]> {
-  const byId = new Map<string, RemoteModel>();
-  for (const m of await fetchModelPage(p, '', signal)) byId.set(String(m.id), mapModel(m));
-  for (let page = 1; page <= 40; page++) {
-    let batch: any[];
-    try {
-      batch = await fetchModelPage(p, `?per_page=1000&page=${page}`, signal);
-    } catch {
-      break;
-    }
-    let added = 0;
-    for (const m of batch) if (!byId.has(String(m.id))) { byId.set(String(m.id), mapModel(m)); added++; }
-    if (added === 0 || batch.length < 1000) break;
-  }
-  return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
+export async function listModelsPage(p: ProviderConfig, page: number, signal?: AbortSignal): Promise<RemoteModel[]> {
+  const rows = await fetchModelPage(p, `?per_page=${PAGE_SIZE}&page=${page}`, signal).catch(async (e) => {
+    // Some servers reject unknown query params; fall back to the plain endpoint on page 1.
+    if (page === 1 && e instanceof ProviderError) return fetchModelPage(p, '', signal);
+    throw e;
+  });
+  return rows.map(mapModel);
+}
+
+/** Turns fetch's opaque network errors into something actionable. */
+export function friendlyError(e: unknown, providerName = 'the provider'): string {
+  const msg = (e as Error)?.message || String(e);
+  if (e instanceof TypeError || /NetworkError|Failed to fetch|Load failed/i.test(msg))
+    return `Couldn't reach ${providerName}. Most often this is a temporary rate limit (wait a minute and try again); otherwise check your internet connection and the base URL.`;
+  if ((e as ProviderError)?.status === 429) return `${providerName} is rate-limiting requests. Wait a minute and try again.`;
+  if ((e as ProviderError)?.status === 401) return `${providerName} rejected the API key (401). Check the key in Settings → Providers.`;
+  return msg;
 }
 
 export function buildBody(model: string, messages: WireMessage[], params: GenParams, stream: boolean) {

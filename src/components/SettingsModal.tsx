@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import { repo } from '../db/db';
 import { uid } from '../lib/id';
-import { listModels, type RemoteModel } from '../providers/openai';
+import { friendlyError, listModelsPage, PAGE_SIZE, type RemoteModel } from '../providers/openai';
+import { recommendedFor, type RecommendedModel } from '../providers/recommended';
+
+const listCache = new Map<string, RemoteModel[]>();
 import {
   deleteModel, deletePreset, deleteProvider, init, modelLabel, saveSettings, ui, upsertModel, upsertPreset, upsertProvider, useStore,
 } from '../store/store';
@@ -43,10 +46,10 @@ function Providers({ onDone }: { onDone: () => void }) {
   const test = async (p: ProviderConfig) => {
     setStatus((s) => ({ ...s, [p.id]: 'Testing…' }));
     try {
-      const list = await listModels(p);
-      setStatus((s) => ({ ...s, [p.id]: `✓ Connected, ${list.length.toLocaleString()} models available` }));
+      const list = await listModelsPage(p, 1);
+      setStatus((s) => ({ ...s, [p.id]: `✓ Connected, ${list.length >= PAGE_SIZE ? `${list.length.toLocaleString()}+` : list.length.toLocaleString()} models available` }));
     } catch (e) {
-      setStatus((s) => ({ ...s, [p.id]: `✗ ${(e as Error).message}` }));
+      setStatus((s) => ({ ...s, [p.id]: `✗ ${friendlyError(e, p.name)}` }));
     }
   };
 
@@ -85,15 +88,34 @@ function Models() {
   const [manual, setManual] = useState('');
   const [busy, setBusy] = useState('');
   const provider = providers.find((p) => p.id === pid);
+  const recommended = provider ? recommendedFor(provider.baseUrl) : [];
 
+  const addRec = (r: RecommendedModel) =>
+    provider && upsertModel({ key: `${provider.id}::${r.id}`, providerId: provider.id, modelId: r.id, nickname: r.nickname, contextLength: r.contextLength, vision: r.vision });
+
+  // Loads every page one at a time, ~1.5s apart, to stay under Featherless's limit of
+  // 30 requests per 45s. Results are cached for the session so reopening Settings is free.
   const fetchList = async () => {
     if (!provider) return;
-    setBusy('Loading…');
+    const cached = listCache.get(provider.id);
+    if (cached) return setRemote(cached);
+    let all: RemoteModel[] = [];
     try {
-      setRemote(await listModels(provider));
+      for (let page = 1; page <= 25; page++) {
+        setBusy(page === 1 ? 'Loading…' : `Loading… ${all.length.toLocaleString()} so far`);
+        const batch = await listModelsPage(provider, page);
+        const seen = new Set(all.map((m) => m.id));
+        const fresh = batch.filter((m) => !seen.has(m.id));
+        all = [...all, ...fresh];
+        setRemote([...all].sort((a, b) => a.id.localeCompare(b.id)));
+        if (batch.length < PAGE_SIZE || fresh.length === 0) break;
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      all.sort((a, b) => a.id.localeCompare(b.id));
+      listCache.set(provider.id, all);
       setBusy('');
     } catch (e) {
-      setBusy(`✗ ${(e as Error).message}`);
+      setBusy(`✗ ${friendlyError(e, provider.name)}${all.length ? ` (kept ${all.length.toLocaleString()} loaded so far)` : ''}`);
     }
   };
   const filtered = useMemo(() => {
@@ -109,7 +131,7 @@ function Models() {
   return (
     <div>
       <h3>Your models</h3>
-      {models.length === 0 && <p className="muted small">None yet. Fetch the list below and add a few.</p>}
+      {models.length === 0 && <p className="muted small">None yet. Add some recommended ones below, or fetch the full list.</p>}
       {models.map((m) => (
         <div key={m.key} className="model-row">
           <input className="nick" value={m.nickname ?? ''} placeholder={modelLabel({ ...m, nickname: undefined })} onChange={(e) => upsertModel({ ...m, nickname: e.target.value || undefined })} title="Nickname" />
@@ -120,12 +142,37 @@ function Models() {
         </div>
       ))}
 
+      {recommended.length > 0 && provider && (
+        <>
+          <h3>Recommended for {provider.name}</h3>
+          <p className="muted small">One click adds the model with a nickname. Bigger models write better but need a plan that includes them and run slower.</p>
+          {[...new Set(recommended.map((r) => r.group))].map((g) => (
+            <div key={g} className="rec-group">
+              <div className="rec-head">
+                <b className="small">{g}</b>
+                <button className="ghost small" onClick={() => recommended.filter((r) => r.group === g).forEach((r) => !models.some((x) => x.key === `${pid}::${r.id}`) && addRec(r))}>Add all</button>
+              </div>
+              {recommended.filter((r) => r.group === g).map((r) => {
+                const added = models.some((x) => x.key === `${pid}::${r.id}`);
+                return (
+                  <div key={r.id} className="remote-row">
+                    <span title={r.id}><b>{r.nickname}</b> <span className="muted">{r.id}</span></span>
+                    <span className="muted small rec-note">{r.note}</span>
+                    <button className="small" disabled={added} onClick={() => addRec(r)}>{added ? 'Added' : 'Add'}</button>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </>
+      )}
+
       <h3>Add from provider</h3>
       <div className="row">
         <select value={pid} onChange={(e) => { setPid(e.target.value); setRemote(null); }}>
           {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <button onClick={fetchList}>Fetch model list</button>
+        <button onClick={fetchList} disabled={busy.startsWith('Loading')}>Fetch model list</button>
         <span className="small">{busy}</span>
       </div>
       {remote && (

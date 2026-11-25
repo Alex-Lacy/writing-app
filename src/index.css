@@ -158,3 +158,7 @@ button.stop { background: var(--danger); color: #fff; border-color: var(--danger
   .grid2 { grid-template-columns: 1fr; }
   .model-row { flex-wrap: wrap; }
 }
+.rec-group { border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; overflow: hidden; }
+.rec-head { display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; background: var(--bg3); }
+.rec-note { flex: 1.2 !important; }
+@media (max-width: 860px) { .rec-group .remote-row { flex-wrap: wrap; } .rec-note { flex-basis: 100%; order: 3; } }
