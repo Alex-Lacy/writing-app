@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { estimateTokens } from '../../context/tokens';
 import { uid } from '../../lib/id';
 import { currentChat, DEFAULT_UPDATES_EVERY, saveSettings, updateChat, upsertPreset, useStore } from '../../store/store';
-import { STORY_PROMPT, type GenParams, type WritingSettings } from '../../types';
+import { MATURE_PROMPT, STORY_PROMPT, type GenParams, type WritingSettings } from '../../types';
 import { SummarySection } from './SummarySection';
 import { TagsSection } from './TagsSection';
 import { ui } from '../../store/store';
@@ -76,7 +76,8 @@ export function SetupTab() {
             value={
               presets.some((p) => p.id === chat.presetId) ? chat.presetId
                 : chat.systemPrompt === defaultPrompt ? 'default'
-                  : chat.systemPrompt === STORY_PROMPT ? 'builtin' : ''
+                  : chat.systemPrompt === STORY_PROMPT ? 'builtin'
+                    : chat.systemPrompt === MATURE_PROMPT ? 'mature' : ''
             }
             onChange={(e) => {
               const v = e.target.value;
@@ -84,12 +85,14 @@ export function SetupTab() {
               if (p) updateChat({ presetId: p.id, systemPrompt: p.systemPrompt });
               else if (v === 'default') updateChat({ presetId: undefined, systemPrompt: defaultPrompt });
               else if (v === 'builtin') updateChat({ presetId: undefined, systemPrompt: STORY_PROMPT });
+              else if (v === 'mature') updateChat({ presetId: undefined, systemPrompt: MATURE_PROMPT });
               else updateChat({ presetId: undefined });
             }}
           >
             <option value="">Custom</option>
             <option value="default" title="The one set in Settings for new stories">Default</option>
             {defaultPrompt !== STORY_PROMPT && <option value="builtin" title="The app's original story prompt">Original</option>}
+            {defaultPrompt !== MATURE_PROMPT && <option value="mature" title="For adult fiction: explicit content without refusals or disclaimers">Mature fiction (uncensored)</option>}
             {presets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <button className="ghost small" onClick={() => {

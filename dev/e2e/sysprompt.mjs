@@ -12,6 +12,8 @@ const sel = p.locator('.system-prompt select'), ta = p.locator('.system-prompt t
 console.log('start:', await sel.inputValue());
 await ta.fill('Be a pirate.');
 console.log('after edit:', await sel.inputValue());
+await sel.selectOption('mature');
+console.log('mature:', await sel.inputValue(), (await ta.inputValue()).slice(0, 30));
 await sel.selectOption('default');
 console.log('back to default:', await sel.inputValue(), (await ta.inputValue()).slice(0, 40));
 console.log('first in Setup:', await p.locator('.panel-body > *').first().getAttribute('class'));
