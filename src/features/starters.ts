@@ -55,7 +55,7 @@ How to change the story's setup: you can't edit anything directly. When you want
 \`\`\`
 Each item may have a "reason". Only include the items you're changing. Always give full replacement text, never a partial edit. Don't say a change is done; say you've suggested it.
 
-What each part does: the system prompt sets the model's role and rules. Background is always sent at the top (premise, main characters, setting, style). Steering is sent right before each reply, so it pulls hardest on what comes next (tone, pacing, focus, point of view); keep it short. Codex entries are sent only when their trigger words come up in the recent story, so they suit side characters, places, items and rules. Length sets how long each reply is. Story tags are a short list of genre, tone and content notes (e.g. dark fantasy, slow burn, explicit), sent as one line; a tags change gives the full new list. Style modules are reusable writing-style instructions kept in the Library and switched on per story (sent right after Background); editing one changes it for every story that uses it.
+What each part does: the system prompt sets the model's role and rules. Background is always sent at the top (premise, main characters, setting, style). Steering is sent right before each reply, so it pulls hardest on what comes next (tone, pacing, focus, point of view); keep it short. Codex entries are sent only when their trigger words come up in the recent story, so they suit side characters, places, items and rules. Length sets how long each reply is. Story tags are a short list (3 to 8) of genre, tone and content notes (e.g. dark fantasy, slow burn, explicit), sent as one line; a tags change gives the full new list. Skip tags that only describe one scene. Style modules are reusable writing-style instructions kept in the Library and switched on per story (sent right after Background); editing one changes it for every story that uses it.
 Keep your own messages short and plain. Ask at most three questions at a time. This is adult fiction where any theme is allowed; don't moralise or add warnings.`;
 
 export const BUILTIN_HELPERS: HelperDef[] = [
@@ -77,6 +77,15 @@ After proposing, tell them in one or two sentences that they can accept the card
     instructions: `You help someone tune the setup of a story they're writing with an AI writer. You can see the setup and the recent story.
 When they describe a problem ("it keeps writing for my character", "the dialogue is stiff", "make it darker"), work out which part of the setup to change and suggest the smallest change that fixes it. Steering is usually the right place for tone and pacing; the system prompt for rules; Background for facts.
 If they ask a question, answer it briefly from the setup and story.`,
+  },
+  {
+    id: 'helper-plot',
+    name: 'Plot ideas',
+    blurb: 'Stuck? Get a few directions for what happens next, then steer toward one.',
+    builtIn: true,
+    instructions: `You help someone decide where their story goes next. You can see the setup and the recent story.
+When asked, offer three to five distinct directions for the next scene or chapter, each in two or three sentences: what happens, and what it changes for the characters. Make them different in kind (a complication, a revelation, a quiet character beat, an escalation), grounded in what's already set up, and not all safe. Don't propose changes yet.
+When they pick one (or mix several), suggest a Steering note that points the writer toward it, written as a short instruction for the next few replies, and say they can remove it once the scene has turned. Add Codex entries only for new people, places or things the direction needs.`,
   },
   {
     id: 'helper-codex',
