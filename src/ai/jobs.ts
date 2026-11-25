@@ -33,7 +33,7 @@ export interface JobModel {
 }
 
 /** Resolves the model for a job: the user's override, else a sensible default, else the story's model. */
-export function jobModel(job: Job, chat?: Chat): JobModel | undefined {
+export function jobModel(job: Job, chat?: Chat, o: { noOverride?: boolean } = {}): JobModel | undefined {
   const s = useStore.getState();
   const storyModel = modelFor(chat, s);
   const storyProvider = providerFor(storyModel, s);
@@ -43,12 +43,20 @@ export function jobModel(job: Job, chat?: Chat): JobModel | undefined {
     // A model removed from "Your models" falls back to the default instead of failing.
     return m ? fromEntry(m, providerFor(m, s)) : undefined;
   };
-  const override = fromKey(s.settings.jobModels?.[job]);
+  const override = o.noOverride ? undefined : fromKey(s.settings.jobModels?.[job]);
   if (override) return override;
   // Rewrites use the story's own model, to keep its voice.
   const def = FEATHERLESS_DEFAULT[job];
   if (def && storyProvider && /featherless\.ai/i.test(storyProvider.baseUrl)) return withCaps(storyProvider, def, s.models);
   return storyModel && storyProvider ? fromEntry(storyModel, storyProvider) : undefined;
+}
+
+/** A short name for a job's model: its nickname, else the model id without the organisation. */
+export function jobModelName(job: Job, chat?: Chat, o: { noOverride?: boolean } = {}): string | undefined {
+  const m = jobModel(job, chat, o);
+  if (!m) return undefined;
+  const s = useStore.getState();
+  return s.models.find((x) => x.providerId === m.provider.id && x.modelId === m.modelId)?.nickname || RECOMMENDED_FEATHERLESS.find((r) => r.id === m.modelId)?.nickname || m.modelId.split('/').pop();
 }
 
 function fromEntry(m: ModelEntry, p?: ProviderConfig): JobModel | undefined {

@@ -6,11 +6,11 @@ import { friendlyError, listModelsPage, PAGE_SIZE, type RemoteModel } from '../p
 import { guessThinking, recommendedFor, type RecommendedModel } from '../providers/recommended';
 import { ModelBadges } from './ModelBadges';
 import type { AppSettings, Job, ModelEntry, Theme } from '../types';
-import { JOB_LABEL } from '../ai/jobs';
+import { JOB_LABEL, jobModelName } from '../ai/jobs';
 
 const listCache = new Map<string, RemoteModel[]>();
 import {
-  type SettingsTab, deleteModel, deletePreset, deleteProvider, init, modelLabel, saveSettings, ui, upsertModel, upsertPreset, upsertProvider, useStore,
+  type SettingsTab, currentChat, deleteModel, deletePreset, deleteProvider, init, modelLabel, saveSettings, ui, upsertModel, upsertPreset, upsertProvider, useStore,
 } from '../store/store';
 import type { ProviderConfig } from '../types';
 
@@ -325,6 +325,8 @@ function JobModelsSection() {
   const models = useStore((x) => x.models);
   const jm = s.jobModels ?? {};
   const set = (job: Job, key: string) => saveSettings({ jobModels: { ...jm, [job]: key || undefined } });
+  const chat = useStore((x) => currentChat(x));
+  const defaults = Object.fromEntries((Object.keys(JOB_LABEL) as Job[]).map((j) => [j, jobModelName(j, chat, { noOverride: true })]));
   return (
     <details>
       <summary>Advanced: models for side jobs</summary>
@@ -337,7 +339,7 @@ function JobModelsSection() {
         {(Object.keys(JOB_LABEL) as Job[]).map((job) => (
           <label key={job} className="field small"><span>{JOB_LABEL[job]}</span>
             <select value={jm[job] ?? ''} onChange={(e) => set(job, e.target.value)}>
-              <option value="">Default</option>
+              <option value="">{defaults[job] ? `Default (${defaults[job]})` : 'Default'}</option>
               {models.map((m) => <option key={m.key} value={m.key}>{m.nickname || m.modelId}</option>)}
             </select>
           </label>

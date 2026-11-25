@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { askHelper, clearThread, deleteHelperMessage, editHelperMessage, helpersList, retryHelper, stopHelper } from '../../features/helper';
 import { renderMarkdown } from '../../lib/markdown';
 import { currentChat, ui, useStore } from '../../store/store';
+import { jobModelName } from '../../ai/jobs';
 import { SuggestionCard } from './SuggestionCard';
 import { useStickyScroll } from '../useStickyScroll';
 import { accept } from '../../store/suggestions';
@@ -13,6 +14,7 @@ export function HelperTab() {
   const threads = useStore((s) => s.helperThreads);
   const suggestions = useStore((s) => s.suggestions);
   const hasStory = useStore((s) => s.messages.length > 0);
+  const modelName = useStore((s) => jobModelName('helper', currentChat(s)));
   const [text, setText] = useState('');
   const box = useRef<HTMLTextAreaElement>(null);
   // Grows upward with what's typed (the box sits at the bottom), up to half the window.
@@ -56,7 +58,10 @@ export function HelperTab() {
         <span className="spacer" />
         {count > 0 && <button className="small ghost" onClick={() => confirm('Clear this conversation? Its open suggestions stay in Suggestions.') && clearThread(chat.id, helper.id)}>Start over</button>}
       </div>
-      <p className="muted small">{helper.blurb} It sees this story's setup and recent text, and suggests changes for you to accept.</p>
+      <p className="muted small">
+        {helper.blurb} It sees this story's setup and recent text, and suggests changes for you to accept.{' '}
+        {modelName && <span title="Change it in Settings, Advanced: models for side jobs">Model: <b>{modelName}</b>.</span>}
+      </p>
       <div className="helper-log">
         {thread?.messages.map((m, i) => (
           m.role === 'tool' ? (
