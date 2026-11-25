@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { repo } from '../db/db';
 import { buildContext, writingBlocks, type BuildResult, type HistoryItem } from '../context/build';
+import { backstopCut, lengthBlocks } from '../context/length';
 import { friendlyError, streamChat, type ProviderError, type WireMessage } from '../providers/openai';
 import {
   activeSwipe, DEFAULT_SETTINGS, FEATHERLESS_PRESET,
@@ -215,12 +216,31 @@ export function buildFor(chat: Chat, msgs: Message[]): BuildResult {
   const s = get();
   return buildContext({
     systemPrompt: chat.systemPrompt,
-    blocks: [...writingBlocks(chat.writing) /* Phase 2: lorebook, summary */],
+    blocks: [
+      ...writingBlocks(chat.writing),
+      ...lengthBlocks(chat.length, chat.writing.enabled && chat.writing.anRole === 'inline' ? 'inline' : 'system'),
+      /* Phase 2: lorebook, summary */
+    ],
     history: historyItems(msgs),
     contextLimit: contextLimitFor(chat, s),
     maxTokens: replyReserve(chat, s),
     safetyMargin: s.settings.safetyMargin,
   });
+}
+
+/**
+ * Request fields for the chat's thinking setting. Hybrid models are switched with chat-template
+ * flags (Qwen/GLM read enable_thinking, DeepSeek/Kimi read thinking; templates ignore the other),
+ * and effort goes in reasoning_effort. Models that always think can't be switched off.
+ */
+export function thinkingExtra(chat: Chat, model: ModelEntry | undefined): Record<string, unknown> {
+  const mode = chat.thinking ?? 'default';
+  if (!model?.thinking || mode === 'default') return {};
+  if (mode === 'off') return model.thinking === 'optional' ? { chat_template_kwargs: { enable_thinking: false, thinking: false } } : { reasoning_effort: 'low' };
+  return {
+    ...(model.thinking === 'optional' ? { chat_template_kwargs: { enable_thinking: true, thinking: true } } : {}),
+    reasoning_effort: mode === 'deep' ? 'high' : 'low',
+  };
 }
 
 /** Thinking models spend thousands of tokens reasoning before they write, so keep more room for them. */
@@ -304,23 +324,45 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
     set({ messages: get().messages.map((x) => (x.id === t.id ? t : x)) });
   };
 
+  const thinkExtra = thinkingExtra(chat, model);
+  const startOffset = swipe.content.length; // the backstop only counts words written now
+  let softStopped = false;
   const run = async (extra?: Record<string, unknown>): Promise<void> => {
+    const withThinking = { ...thinkExtra, ...extra };
     try {
-      await runOnce(extra);
+      try {
+        await runOnce(withThinking);
+      } catch (e) {
+        // A server that doesn't know the thinking fields: retry plain once.
+        const err = e as ProviderError;
+        if (Object.keys(thinkExtra).length && err.status === 400 && /chat_template_kwargs|reasoning_effort|enable_thinking|thinking|extra/i.test(err.message) && !swipe.content && !swipe.reasoning) {
+          await runOnce(extra);
+          set({ error: `${provider.name} ignored the thinking setting for this model.` });
+        } else throw e;
+      }
     } catch (e) {
       // Our token count is an estimate. If the server says the request is too long, retry once
       // with only the reserved reply room.
       const err = e as ProviderError;
       if (err.status === 400 && /max_tokens|max_completion_tokens|context length|maximum context|too long/i.test(err.message) && params.maxTokens > replyReserve(chat) && !swipe.content && !swipe.reasoning) {
         params.maxTokens = replyReserve(chat);
-        await runOnce(extra);
+        await runOnce(withThinking);
       } else throw e;
     }
   };
   const runOnce = async (extra?: Record<string, unknown>) => {
     for await (const ev of streamChat(provider, model.modelId, ctx.messages as WireMessage[], params, abort!.signal, extra)) {
-      if (ev.type === 'content') swipe = { ...swipe, content: swipe.content + ev.text };
-      else if (ev.type === 'reasoning') swipe = { ...swipe, reasoning: (swipe.reasoning ?? '') + ev.text };
+      if (ev.type === 'content') {
+        swipe = { ...swipe, content: swipe.content + ev.text };
+        const cut = backstopCut(swipe.content, chat.length, startOffset);
+        if (cut >= 0) {
+          swipe = { ...swipe, content: swipe.content.slice(0, cut).trimEnd() };
+          softStopped = true;
+          paint(true);
+          abort!.abort();
+          return;
+        }
+      } else if (ev.type === 'reasoning') swipe = { ...swipe, reasoning: (swipe.reasoning ?? '') + ev.text };
       else swipe = { ...swipe, finishReason: ev.finishReason };
       paint();
     }
@@ -343,8 +385,9 @@ export async function generate(targetId?: string, opts: { continueId?: string } 
       const msg = friendlyError(e, provider.name);
       swipe = { ...swipe, error: msg };
       set({ error: msg });
-    } else swipe = { ...swipe, finishReason: 'stopped' };
+    } else swipe = { ...swipe, finishReason: softStopped ? 'length-soft' : 'stopped' };
   } finally {
+    if (softStopped) swipe = { ...swipe, finishReason: 'length-soft', error: undefined };
     paint(true);
     abort = null;
     set({ streamingId: undefined });

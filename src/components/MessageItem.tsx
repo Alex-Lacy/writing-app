@@ -76,6 +76,12 @@ export const MessageItem = memo(function MessageItem({ m, isLast, outOfContext }
       )}
 
       {sw.error && <div className="msg-error">⚠ {sw.error}</div>}
+      {sw.finishReason === 'length-soft' && !streaming && (
+        <div className="msg-note">
+          Stopped at a clean break because it ran well past your length setting.{' '}
+          {isLast && <button className="small" disabled={busy} onClick={() => continueReply(m.id)}>Continue</button>}
+        </div>
+      )}
       {sw.finishReason === 'length' && !streaming && (
         sw.content.trim() ? (
           <div className="msg-note">

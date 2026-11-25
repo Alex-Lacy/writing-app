@@ -22,6 +22,16 @@ http.createServer(async (req, res) => {
     res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`);
     return res.end('data: [DONE]\n\n');
   }
+  if (String(last.content).includes('RAMBLE')) {
+    res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream' });
+    res.write(`data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: 'thinking '.repeat(400) } }] })}\n\n`);
+    for (let i = 0; i < 120; i++) {
+      res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: `Sentence number ${i} has some words in it. ` } }] })}\n\n`);
+      await new Promise((r) => setTimeout(r, 3));
+    }
+    res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`);
+    return res.end('data: [DONE]\n\n');
+  }
   if (String(last.content).includes('LONG')) {
     res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream' });
     res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: 'A story that was cut' } }] })}\n\n`);

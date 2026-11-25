@@ -4,6 +4,7 @@ import { uid } from '../lib/id';
 import { friendlyError, listModelsPage, PAGE_SIZE, type RemoteModel } from '../providers/openai';
 import { recommendedFor, type RecommendedModel } from '../providers/recommended';
 import { ModelBadges } from './ModelBadges';
+import type { ModelEntry } from '../types';
 
 const listCache = new Map<string, RemoteModel[]>();
 import {
@@ -139,6 +140,11 @@ function Models() {
           <input className="nick" value={m.nickname ?? ''} placeholder={modelLabel({ ...m, nickname: undefined })} onChange={(e) => upsertModel({ ...m, nickname: e.target.value || undefined })} title="Nickname" />
           <span className="muted small model-id" title={m.modelId}>{m.modelId} · {providers.find((p) => p.id === m.providerId)?.name} <ModelBadges m={m} showCtx={false} /></span>
           <input className="ctx" type="number" value={m.contextLength ?? ''} placeholder="ctx" title="Model context length (optional)" onChange={(e) => upsertModel({ ...m, contextLength: e.target.value ? Number(e.target.value) : undefined })} />
+          <select className="think-sel" value={m.thinking ?? ''} title="Does this model think before replying? Turns on the Thinking control in chat." onChange={(e) => upsertModel({ ...m, thinking: (e.target.value || undefined) as ModelEntry['thinking'] })}>
+            <option value="">No thinking</option>
+            <option value="optional">Thinking optional</option>
+            <option value="always">Always thinks</option>
+          </select>
           <label className="small" title="Default model for new chats"><input type="radio" checked={defaultKey === m.key} onChange={() => saveSettings({ defaultModelKey: m.key })} /> default</label>
           <button className="icon" onClick={() => deleteModel(m.key)} title="Remove">✕</button>
         </div>

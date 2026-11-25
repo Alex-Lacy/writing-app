@@ -104,17 +104,23 @@ export function buildContext(input: BuildInput): BuildResult {
 
   const body: WireMessage[] = kept.map((h) => ({ role: h.role, content: h.content }));
 
-  // Insert depth blocks deepest-first so indices stay valid.
-  const sorted = [...depthBlocks].sort(
-    (a, b) => (b.placement as { depth: number }).depth - (a.placement as { depth: number }).depth,
-  );
-  for (const b of sorted) {
-    const p = b.placement as { kind: 'depth'; depth: number; mode: 'system' | 'inline' };
-    const idx = Math.max(0, body.length - p.depth);
-    if (p.mode === 'inline' && body[idx]) {
-      body[idx] = { ...body[idx], content: prependText(body[idx].content, `[${b.label}: ${b.text}]`) };
+  // Blocks at the same depth and mode share one message (strict templates dislike runs of
+  // system messages). Insert deepest-first so indices stay valid.
+  const groups = new Map<string, { depth: number; mode: 'system' | 'inline'; texts: string[] }>();
+  for (const blk of depthBlocks) {
+    const p = blk.placement as { kind: 'depth'; depth: number; mode: 'system' | 'inline' };
+    const key = `${p.depth}|${p.mode}`;
+    const g = groups.get(key) ?? { depth: p.depth, mode: p.mode, texts: [] };
+    g.texts.push(p.mode === 'inline' && !blk.text.startsWith('[') ? `[${blk.label}: ${blk.text}]` : blk.text);
+    groups.set(key, g);
+  }
+  for (const g of [...groups.values()].sort((a, b) => b.depth - a.depth)) {
+    const idx = Math.max(0, body.length - g.depth);
+    const text = g.texts.join('\n\n');
+    if (g.mode === 'inline' && body[idx]) {
+      body[idx] = { ...body[idx], content: prependText(body[idx].content, text) };
     } else {
-      body.splice(idx, 0, { role: 'system', content: b.text });
+      body.splice(idx, 0, { role: 'system', content: text });
     }
   }
 

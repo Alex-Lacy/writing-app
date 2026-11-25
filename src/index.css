@@ -173,3 +173,10 @@ button.stop { background: var(--danger); color: #fff; border-color: var(--danger
 .rec-group .remote-row button { margin-top: 4px; }
 .model-row .model-id { white-space: normal; overflow-wrap: anywhere; }
 .model-row .ctx { width: 96px; }
+.composer-wrap { max-width: 860px; width: 100%; margin: 0 auto; }
+.composer-wrap .composer { max-width: none; }
+.composer-opts { display: flex; gap: 12px; padding: 6px 20px 0; flex-wrap: wrap; }
+.composer-opts label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.composer-opts select { width: auto; padding: 3px 8px; font-size: 13px; }
+.model-row .think-sel { width: auto; font-size: 12px; padding: 4px 6px; }
+@media (max-width: 860px) { .composer-opts { padding: 6px 10px 0; } }

@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { insertMessage, send, stop, useStore } from '../store/store';
+import { LENGTH_BUCKETS, LENGTH_ORDER, type LengthBucket } from '../context/length';
+import { currentChat, insertMessage, modelFor, send, stop, updateChat, useStore } from '../store/store';
+import type { ThinkingMode } from '../types';
 
 export function Composer() {
   const streaming = useStore((s) => !!s.streamingId);
   const enterToSend = useStore((s) => s.settings.enterToSend);
   const chatId = useStore((s) => s.currentChatId);
+  const chat = useStore((s) => currentChat(s));
+  const model = useStore((s) => modelFor(currentChat(s), s));
   const [text, setText] = useState('');
   const ta = useRef<HTMLTextAreaElement>(null);
 
@@ -27,6 +31,28 @@ export function Composer() {
   const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 
   return (
+    <div className="composer-wrap">
+      {chat && (
+        <div className="composer-opts">
+          <label title="How long replies should be. Sent to the model as a soft instruction; replies that run far past it stop at a clean sentence or paragraph end.">
+            <span>Length</span>
+            <select value={chat.length ?? 'any'} onChange={(e) => updateChat({ length: e.target.value as LengthBucket })}>
+              {LENGTH_ORDER.map((b) => <option key={b} value={b}>{LENGTH_BUCKETS[b].label}</option>)}
+            </select>
+          </label>
+          {model?.thinking && (
+            <label title={model.thinking === 'always' ? 'This model always thinks; you can set how hard.' : 'Turn thinking off for speed, or ask for light or deep reasoning.'}>
+              <span>Thinking</span>
+              <select value={chat.thinking ?? 'default'} onChange={(e) => updateChat({ thinking: e.target.value as ThinkingMode })}>
+                <option value="default">Model default</option>
+                {model.thinking === 'optional' && <option value="off">Off</option>}
+                <option value="light">Light</option>
+                <option value="deep">Deep</option>
+              </select>
+            </label>
+          )}
+        </div>
+      )}
     <div className="composer">
       <textarea
         ref={ta}
@@ -56,6 +82,7 @@ export function Composer() {
           </>
         )}
       </div>
+    </div>
     </div>
   );
 }

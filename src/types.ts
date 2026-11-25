@@ -1,3 +1,5 @@
+import type { LengthBucket } from './context/length';
+
 // Core data model. Later phases add fields here (marked optional) so stored data stays forward-compatible.
 
 export type Role = 'system' | 'user' | 'assistant';
@@ -60,6 +62,9 @@ export interface WritingSettings {
   // Phase 2: lorebookId?: string; condense?: CondenseSettings; slopSlayer?: SlopSettings
 }
 
+/** Per-chat thinking control, only offered for models that can think. */
+export type ThinkingMode = 'default' | 'off' | 'light' | 'deep';
+
 export interface Chat {
   id: string;
   title: string;
@@ -70,6 +75,8 @@ export interface Chat {
   presetId?: string;
   params: GenParams;
   writing: WritingSettings;
+  length?: LengthBucket;
+  thinking?: ThinkingMode;
   // Phase 2: summary?: string (condensed history)
 }
 
