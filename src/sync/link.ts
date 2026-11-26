@@ -429,3 +429,74 @@ export async function shareLocalAddress() {
   const s = await navigator.mediaDevices.getUserMedia({ video: true });
   s.getTracks().forEach((t) => t.stop());
 }
+
+// ---------- paired devices: sync through the relay at the press of a button ----------
+// Once two devices have synced with a code, they keep that code as a shared secret. Later, one
+// "knocks" on the other through the relay (the other must have the app open and listens for
+// knocks while it is), and the two sync through the relay, everything encrypted with the secret.
+
+const knockUrl = (base: string, topic: string, to: string) => `${base.replace(/\/$/, '')}/${topic}-knock-${to}`;
+
+/** Asks a paired device to sync. Resolves with the session id once it has heard the knock. */
+export async function knock(secret: string, me: string, peer: string, o: { pipe?: string; signal?: AbortSignal; waitMs?: number } = {}): Promise<string> {
+  const { topic, key } = await keysFor(secret);
+  const session = Math.random().toString(36).slice(2, 12);
+  const stop = new AbortController();
+  const t = setTimeout(() => stop.abort(), o.waitMs ?? 20_000);
+  o.signal?.addEventListener('abort', () => stop.abort());
+  try {
+    const r = await fetch(knockUrl(o.pipe || PIPE_DEFAULT, topic, peer), { method: 'POST', body: await seal(key, { from: me, at: Date.now(), session }), signal: stop.signal });
+    if (!r.ok) throw new Error(`The relay answered ${r.status}.`);
+    return session;
+  } catch (e) {
+    if (o.signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
+    if (stop.signal.aborted) throw new Error("The other device didn't answer. Open Writing Studio there (it listens while it's open) and try again.");
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/** Listens for a knock from a paired device, as long as `signal` allows. Resolves with the session id. */
+export async function waitForKnock(secret: string, me: string, peer: string, o: { pipe?: string; signal: AbortSignal }): Promise<string> {
+  const { topic, key } = await keysFor(secret);
+  for (let wait = 2000; !o.signal.aborted; ) {
+    const began = Date.now();
+    try {
+      const r = await fetch(knockUrl(o.pipe || PIPE_DEFAULT, topic, me), { signal: o.signal });
+      if (r.ok) {
+        const k = await open<{ from: string; at: number; session: string }>(key, await r.text());
+        if (k && k.from === peer && Math.abs(Date.now() - k.at) < 120_000 && /^[a-z0-9]{4,20}$/.test(k.session)) return k.session;
+        wait = 2000;
+        continue;
+      }
+    } catch {
+      /* relay unreachable or the request timed out: try again shortly */
+    }
+    if (o.signal.aborted) break;
+    // A wait that ran long and was then cut (proxies end idle requests) isn't a failure: listen again now.
+    if (Date.now() - began > 15_000) wait = 1000;
+    await new Promise((res) => setTimeout(res, wait));
+    wait = Math.min(60_000, wait * 2);
+  }
+  throw new DOMException('Stopped', 'AbortError');
+}
+
+/** The relay link for one paired sync session. */
+export async function connectPaired(secret: string, session: string, role: 'host' | 'guest', o: { pipe?: string; signal?: AbortSignal } = {}): Promise<Link> {
+  const { topic, key } = await keysFor(secret);
+  const rc = new RelayChannel(o.pipe || PIPE_DEFAULT, `${topic}-${session}`, key, role);
+  try {
+    await new Promise<void>((res, rej) => {
+      const t = setTimeout(() => rej(new Error("Couldn't reach the other device through the relay.")), 60_000);
+      rc.onmessage = (m) => m.data === 'hello' && (clearTimeout(t), res());
+      rc.onclose = () => rej(new Error('The relay closed the connection.'));
+      o.signal?.addEventListener('abort', () => rej(new DOMException('Cancelled', 'AbortError')));
+      rc.send('hello');
+    });
+  } catch (e) {
+    rc.close();
+    throw e;
+  }
+  return new Link(rc);
+}

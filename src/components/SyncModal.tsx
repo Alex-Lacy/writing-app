@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import qrcode from 'qrcode-generator';
-import { cleanCode, connect, newCode, PIPE_DEFAULT, shareLocalAddress, SIGNAL_DEFAULT, type ConnectError, type Link } from '../sync/link';
-import { guestServe, hostApply, hostCancel, hostReview, lastSnapshotAt, undoLastSync, type Choice } from '../sync/session';
+import { cleanCode, connect, connectPaired, knock, newCode, PIPE_DEFAULT, shareLocalAddress, SIGNAL_DEFAULT, type ConnectError, type Link } from '../sync/link';
+import { forgetPair, guestServe, hostApply, hostCancel, hostReview, lastSnapshotAt, listPairs, me, onPairsChanged, savePair, undoLastSync, type Choice, type Pair } from '../sync/session';
+import { useIncoming } from '../sync/incoming';
 import { saveSettings, ui, useStore } from '../store/store';
 
 type Review = Awaited<ReturnType<typeof hostReview>>;
@@ -33,6 +34,19 @@ export function SyncModal() {
   const [snapAt, setSnapAt] = useState<number>();
   const link = useRef<Link>(undefined);
   const abort = useRef<AbortController>(undefined);
+  /** The pairing secret of the sync under way, kept so the two devices can sync again with a button. */
+  const secret = useRef('');
+  const [pairs, setPairs] = useState<Pair[]>([]);
+  useEffect(() => {
+    const load = () => void listPairs().then(setPairs);
+    load();
+    return onPairsChanged(load);
+  }, []);
+  const remember = async (peerId: string, peerName: string) => {
+    if (!secret.current) return;
+    const old = (await listPairs()).find((p) => p.peerId === peerId);
+    await savePair({ peerId, peerName, secret: secret.current, pairedAt: old?.pairedAt ?? Date.now(), lastSync: Date.now() });
+  };
 
 
   const fail = useCallback((e: unknown) => {
@@ -42,6 +56,7 @@ export function SyncModal() {
 
   const host = async () => {
     const code = newCode();
+    secret.current = code;
     abort.current = new AbortController();
     setStage({ k: 'host', code, status: 'Getting ready…' });
     try {
@@ -58,15 +73,63 @@ export function SyncModal() {
   const join = useCallback(async (code: string) => {
     if (cleanCode(code).length < 10) return;
     abort.current = new AbortController();
+    secret.current = cleanCode(code);
     setStage({ k: 'guest', status: 'Looking for the other device…' });
     try {
       link.current = await connect(code, 'guest', { relay, turn, pipe, signal: abort.current.signal, onStatus: (status) => setStage({ k: 'guest', status }) });
-      const summary = await guestServe(link.current, (status) => setStage({ k: 'guest', status }));
+      let peer: [string, string] | undefined;
+      const summary = await guestServe(link.current, (status) => setStage({ k: 'guest', status }), (id, name) => (peer = [id, name]));
+      if (peer) await remember(...peer);
       setStage({ k: 'done', summary });
     } catch (e) {
       fail(e);
     }
   }, [relay, turn, pipe, fail]);
+
+  /** Asks a paired device to sync, through the relay, and shows the review here. */
+  const callPair = async (p: Pair) => {
+    if (pipe === false) return;
+    abort.current = new AbortController();
+    secret.current = p.secret;
+    const signal = abort.current.signal;
+    setStage({ k: 'guest', status: `Asking ${p.peerName} to sync…` });
+    try {
+      const session = await knock(p.secret, (await me()).deviceId, p.peerId, { pipe, signal });
+      setStage({ k: 'guest', status: 'Connecting through the relay…' });
+      link.current = await connectPaired(p.secret, session, 'host', { pipe, signal });
+      setStage({ k: 'guest', status: 'Connected. Comparing stories…' });
+      const r = await hostReview(link.current);
+      setChoices({});
+      setStage({ k: 'review', r, relayed: true });
+    } catch (e) {
+      fail(e);
+    }
+  };
+
+  // A paired device asked to sync: answer it (unless a sync is already under way here).
+  const knocked = useIncoming((s) => s.knock);
+  const idle = stage.k === 'start' || stage.k === 'done' || stage.k === 'error';
+  useEffect(() => {
+    if (!knocked || !idle || pipe === false) return;
+    useIncoming.getState().clear();
+    if (Date.now() - knocked.at > 30_000) return;
+    const { pair, session } = knocked;
+    abort.current = new AbortController();
+    secret.current = pair.secret;
+    setStage({ k: 'guest', status: `${pair.peerName} asked to sync. Connecting…` });
+    void (async () => {
+      try {
+        link.current = await connectPaired(pair.secret, session, 'guest', { pipe, signal: abort.current!.signal });
+        let peer: [string, string] | undefined;
+        const summary = await guestServe(link.current, (status) => setStage({ k: 'guest', status }), (id, name) => (peer = [id, name]));
+        if (peer) await remember(...peer);
+        setStage({ k: 'done', summary });
+      } catch (e) {
+        fail(e);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [knocked, idle, pipe]);
 
   // Opened from a scanned pairing link: join straight away (once).
   const autoJoin = useRef(pairFromUrl());
@@ -90,6 +153,7 @@ export function SyncModal() {
     setStage({ k: 'applying' });
     try {
       const summary = await hostApply(link.current!, r, choices, only ? current : undefined);
+      await remember(r.remote.deviceId, r.remote.deviceName);
       setStage({ k: 'done', summary });
     } catch (e) {
       fail(e);
@@ -111,6 +175,23 @@ export function SyncModal() {
         <div className="modal-body">
           {stage.k === 'start' && (
             <>
+              {pairs.length > 0 && (
+                <div className="card sync-pairs">
+                  <b>Your devices</b>
+                  {pairs.map((p) => (
+                    <div key={p.peerId} className="row sync-pair">
+                      <span className="grow">{p.peerName} <span className="muted small">· {p.lastSync ? `synced ${new Date(p.lastSync).toLocaleString()}` : `paired ${new Date(p.pairedAt).toLocaleDateString()}`}</span></span>
+                      <button className="primary" disabled={pipe === false} onClick={() => void callPair(p)}>Sync now</button>
+                      <button className="small ghost" title="Stop syncing with this device without a code" onClick={() => confirm(`Forget ${p.peerName}? You'll need a code to sync with it again.`) && void forgetPair(p.peerId)}>Forget</button>
+                    </div>
+                  ))}
+                  <p className="muted small">
+                    {pipe === false
+                      ? 'Syncing without a code goes through the relay, which is turned off under Advanced.'
+                      : 'Open Writing Studio on that device too (it listens while it is open), then press Sync now. This goes through the relay, encrypted with the code you paired with.'}
+                  </p>
+                </div>
+              )}
               <p className="muted small">
                 Copies stories and shared Codex books between your phone and computer, straight from one device to the other.
                 Your stories never go through a server: the two devices only swap a short, encrypted connection note to find each other.

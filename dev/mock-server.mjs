@@ -45,6 +45,7 @@ http.createServer(async (req, res) => {
     }
     if (w.post) return w.post(res);
     w.get = res;
+    req.on('close', () => w.get === res && !res.writableEnded && delete w.get);
     return;
   }
   if (req.url.endsWith('/last')) return res.writeHead(200, { ...cors, 'Content-Type': 'application/json' }).end(JSON.stringify(lastBody, null, 2));

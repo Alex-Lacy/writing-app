@@ -7,6 +7,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { LibraryModal } from './components/LibraryModal';
 import { CompileModal } from './components/CompileModal';
 import { SyncModal } from './components/SyncModal';
+import { PairListener } from './components/PairListener';
 import { Sidebar } from './components/Sidebar';
 import { StoryPanel } from './components/panel/StoryPanel';
 import './features/updates';
@@ -73,6 +74,7 @@ export default function App() {
       {libraryOpen && <LibraryModal />}
       {compileOpen && <CompileModal />}
       {syncOpen && <SyncModal />}
+      <PairListener />
     </div>
   );
 }

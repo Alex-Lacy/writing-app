@@ -23,6 +23,27 @@ export async function me(): Promise<Me> {
 
 const baseKey = (peer: string) => `syncBase:${peer}`;
 
+/** A device this one has synced with by code: they can sync again with a button, through the relay. */
+export interface Pair { peerId: string; peerName: string; secret: string; pairedAt: number; lastSync?: number }
+export const listPairs = async () => (await repo.kvGet<Pair[]>('syncPairs')) ?? [];
+export async function savePair(p: Pair) {
+  const all = (await listPairs()).filter((x) => x.peerId !== p.peerId);
+  await repo.kvPut('syncPairs', [...all, p]);
+  pairsChanged();
+}
+export async function forgetPair(peerId: string) {
+  await repo.kvPut('syncPairs', (await listPairs()).filter((x) => x.peerId !== peerId));
+  pairsChanged();
+}
+export async function touchPair(peerId: string) {
+  const all = await listPairs();
+  await repo.kvPut('syncPairs', all.map((x) => (x.peerId === peerId ? { ...x, lastSync: Date.now() } : x)));
+  pairsChanged();
+}
+const pairListeners = new Set<() => void>();
+export const onPairsChanged = (f: () => void) => (pairListeners.add(f), () => void pairListeners.delete(f));
+const pairsChanged = () => pairListeners.forEach((f) => f());
+
 async function localManifest(): Promise<{ units: Unit[]; manifest: Manifest }> {
   const m = await me();
   const units = await loadUnits();
@@ -219,11 +240,12 @@ async function finish(link: Link, peer: string) {
 }
 
 /** Guest: answers the host until the sync is done. Resolves with the summary. */
-export async function guestServe(link: Link, onStatus: (s: string) => void): Promise<string> {
+export async function guestServe(link: Link, onStatus: (s: string) => void, onPeer?: (id: string, name: string) => void): Promise<string> {
   const { units, manifest } = await localManifest();
   const hello = link.next<Extract<Wire, { type: 'hello' }>>(is('hello'));
   await link.send({ type: 'hello', manifest } satisfies Wire);
   const host = (await hello).manifest;
+  onPeer?.(host.deviceId, host.deviceName);
   onStatus(`Connected to ${host.deviceName}. Review and apply the sync there.`);
   return new Promise((res, rej) => {
     link.onClose = () => rej(new Error('The other device closed the connection.'));
