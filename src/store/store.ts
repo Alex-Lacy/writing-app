@@ -178,7 +178,17 @@ async function doInit() {
     s.nextChatNum = n;
     await repo.putSettings(s);
   }
-  set({ ready: true, settings: s, providers: provs, models, presets, codex, chats: sortChats(allChats), settingsOpen: !provs.some((p) => p.apiKey) });
+  // A story's own Codex book goes with the story. Clean up any left behind (not Library books,
+  // and not one changed in the last few minutes, which may be mid-sync ahead of its story).
+  const ids = new Set(allChats.map((c) => c.id));
+  const orphans = codex.filter((b) => b.chatId && !ids.has(b.chatId) && Date.now() - (b.updatedAt ?? 0) > 10 * 60_000);
+  for (const b of orphans) await repo.del('codex', b.id);
+  // Own books are named after their story; keep the name in step with the title.
+  const books = codex.filter((b) => !orphans.includes(b)).map((b) => {
+    const c = b.chatId ? allChats.find((x) => x.id === b.chatId && x.codexId === b.id) : undefined;
+    return c && b.name !== `${c.title} (story)` ? { ...b, name: `${c.title} (story)` } : b;
+  });
+  set({ ready: true, settings: s, providers: provs, models, presets, codex: books, chats: sortChats(allChats), settingsOpen: !provs.some((p) => p.apiKey) });
   const first = sortChats(allChats)[0];
   if (first) await selectChat(first.id, true);
 }
@@ -274,6 +284,13 @@ export async function updateChat(patch: Partial<Chat>, id = get().currentChatId)
   const next = { ...chat, ...patch, updatedAt: Date.now() };
   set({ chats: sortChats(get().chats.map((c) => (c.id === id ? next : c))) });
   await repo.put('chats', next);
+  // Its own Codex book carries the story's name.
+  const own = patch.title !== undefined && get().codex.find((b) => b.id === next.codexId && b.chatId === next.id);
+  if (own) {
+    const b = { ...own, name: `${next.title} (story)` };
+    set({ codex: get().codex.map((x) => (x.id === b.id ? b : x)) });
+    await repo.put('codex', b);
+  }
 }
 
 /** Copies a story (its setup, own Codex and messages). With `upTo`, only up to that message: a branch. */

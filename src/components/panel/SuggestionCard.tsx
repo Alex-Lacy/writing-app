@@ -41,7 +41,11 @@ export function SuggestionCard({ x, hideSource }: { x: Suggestion; hideSource?: 
   const books = useStore((s) => s.codex);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(x.after);
-  const bookName = (id: string) => books.find((b) => b.id === id)?.name ?? '';
+  // A story's own book reads as "this story's Codex"; shared books by their name.
+  const bookName = (id: string) => {
+    const b = books.find((x) => x.id === id);
+    return !b ? '' : b.chatId === x.chatId ? "this story's Codex" : b.name;
+  };
   const t = x.target;
   const keys = t.kind === 'codex-add' || t.kind === 'codex-edit' ? t.entry.keys : undefined;
   const showsAfter = t.kind !== 'codex-remove' && t.kind !== 'style-toggle' && t.kind !== 'length' && t.kind !== 'outline-next';
