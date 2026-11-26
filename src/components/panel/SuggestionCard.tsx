@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { keptShare, wordDiff } from '../../lib/diff';
 import { accept, reject, undo } from '../../store/suggestions';
 import { useStore } from '../../store/store';
 import type { Suggestion } from '../../types';
@@ -42,6 +43,13 @@ export function SuggestionCard({ x, hideSource }: { x: Suggestion; hideSource?: 
   const bookName = (id: string) => books.find((b) => b.id === id)?.name ?? '';
   const t = x.target;
   const keys = t.kind === 'codex-add' || t.kind === 'codex-edit' ? t.entry.keys : undefined;
+  const showsAfter = t.kind !== 'codex-remove' && t.kind !== 'style-toggle' && t.kind !== 'length' && t.kind !== 'outline-next';
+  // Only what changed, marked inline; a near-total rewrite reads better as old and new in full.
+  const diff = useMemo(() => {
+    if (editing || !showsAfter || t.kind === 'summary' || !x.before || !x.after) return;
+    const d = wordDiff(x.before, x.after);
+    return d && keptShare(d, x.before) >= 0.3 ? d : undefined;
+  }, [editing, showsAfter, t.kind, x.before, x.after]);
   return (
     <div className={`sg-card sg-${x.status}`}>
       <div className="sg-head">
@@ -50,8 +58,10 @@ export function SuggestionCard({ x, hideSource }: { x: Suggestion; hideSource?: 
       </div>
       {x.reason && <p className="muted small">{x.reason}</p>}
       {keys && keys.length > 0 && <p className="muted small">Triggers: {keys.join(', ')}</p>}
-      {x.before && t.kind !== 'summary' && <div className="sg-before">{x.before}</div>}
-      {t.kind !== 'codex-remove' && t.kind !== 'style-toggle' && t.kind !== 'length' && t.kind !== 'outline-next' && (editing ? (
+      {diff ? (
+        <div className="sg-diff">{diff.map((p, i) => (p.kind === 'same' ? <span key={i}>{p.text}</span> : p.kind === 'del' ? <del key={i}>{p.text}</del> : <ins key={i}>{p.text}</ins>))}</div>
+      ) : x.before && t.kind !== 'summary' && <div className="sg-before">{x.before}</div>}
+      {!diff && showsAfter && (editing ? (
         <textarea rows={Math.min(12, Math.max(3, Math.ceil(text.length / 45)))} value={text} onChange={(e) => setText(e.target.value)} />
       ) : (
         <div className="sg-after">{x.after}</div>

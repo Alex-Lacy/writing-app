@@ -63,6 +63,8 @@ await p.locator('.msg-user .msg-actions button:has-text("Rewrite")').click();
 await p.locator('.rewrite-box button:has-text("Proofread")').click();
 await p.waitForSelector('.msg-user .msg-cards .sg-card');
 console.log('proofread card:', (await p.locator('.msg-user .sg-card').innerText()).replace(/\s+/g, ' ').slice(0, 120));
+await p.locator('.msg-user .sg-card').first().screenshot({ path: '/tmp/p3-diff.png' });
+console.log('diff parts:', await p.locator('.msg-user .sg-diff del, .msg-user .sg-diff ins').allInnerTexts());
 // Filter tab
 await p.locator('.topbar button[title*="Story panel"], .topbar button:has-text("▤")').first().click();
 await p.locator('.panel-tabs button:has-text("Cliché")').click();

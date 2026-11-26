@@ -406,3 +406,7 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .helper-top { position: sticky; top: -12px; z-index: 2; background: var(--bg2); padding: 12px 0 6px; margin-top: -12px; border-bottom: 1px solid transparent; }
 .fixed-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
 .cliche-btns { display: inline-flex; gap: 2px; flex-shrink: 0; }
+/* Suggestion cards: only what changed, marked inline */
+.sg-diff { white-space: pre-wrap; font-size: 13px; padding: 6px 8px; border-radius: 6px; margin: 6px 0; max-height: 320px; overflow-y: auto; background: var(--bg3); }
+.sg-diff del { background: rgba(212, 112, 107, 0.18); color: var(--muted, #999); text-decoration-color: rgba(212, 112, 107, 0.7); border-radius: 3px; }
+.sg-diff ins { background: rgba(111, 157, 106, 0.25); text-decoration: none; border-radius: 3px; }
