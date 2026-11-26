@@ -8,7 +8,7 @@ const MODES: [FilterMode, string, string][] = [
   ['off', 'Off', 'No checking.'],
   ['highlight', 'Highlight', 'Marks stock phrases in replies. Free: no AI involved.'],
   ['suggest', 'Suggest fixes', 'After each reply, a quick model rewrites the sentences they’re in, as cards you accept.'],
-  ['auto', 'Fix automatically', 'Same, but applied straight away. Undo any of them from Suggestions.'],
+  ['auto', 'Fix automatically', 'Same, but applied straight away. Undo them under the reply.'],
 ];
 
 export function FilterTab() {
@@ -41,12 +41,12 @@ export function FilterTab() {
         <p className="muted small">Catches the stock phrases that make AI prose sound machine-written (“a shiver ran down her spine”, “eyes sparkling with mischief”).</p>
         {MODES.map(([v, label, hint]) => (
           <label key={v} className="switch small radio">
-            <input type="radio" name="filter-mode" checked={mode === v} onChange={() => setFilter({ mode: v })} />
+            <input type="radio" name="filter-mode" checked={mode === v} onChange={() => { void setFilter({ mode: v }); void saveSettings({ filterMode: v }); }} />
             <span><b>{label}</b> <span className="muted">{hint}</span></span>
           </label>
         ))}
-        <p className="muted small">In any mode, the “N clichés” chip under a reply lists them, with Fix buttons.</p>
-        {mode === 'auto' && (
+        <p className="muted small">In any mode, the “N clichés” chip under a reply lists them, with Fix buttons that change the reply straight away. Your choice here also becomes the default for new stories.</p>
+        {(mode === 'auto' || mode === 'suggest') && (
           <label className="field small">
             <span>Most fixes per reply</span>
             <input

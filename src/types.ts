@@ -333,6 +333,8 @@ export interface AppSettings {
   defaultUpdatesEvery?: number;
   defaultAutoSummary?: boolean;
   /** Cliché Filter: the person's own rules and word lists, added to the built-in ones. */
+  /** Cliché Filter mode for stories that haven't picked their own (the last one chosen). */
+  filterMode?: FilterMode;
   filterRules?: string;
   filterLists?: string;
   /** Style modules in the Library. */

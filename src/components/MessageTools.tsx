@@ -6,7 +6,7 @@ import { locate } from './messageHooks';
 import type { Hit } from '../features/filter/rules';
 import { proofread, rewriteMessage, rewritePassage } from '../features/rewrite';
 import { ui, useStore } from '../store/store';
-import { nearest } from '../store/suggestions';
+import { nearest, reject, undo } from '../store/suggestions';
 import { activeSwipe, type Message } from '../types';
 import { SuggestionCard } from './panel/SuggestionCard';
 
@@ -20,7 +20,7 @@ export function ClicheChip({ m, hits }: { m: Message; hits: Hit[] }) {
   const fix = async (which: Hit[]) => {
     setBusy(true);
     try {
-      await fixCliches(chatId, m.id, which);
+      await fixCliches(chatId, m.id, which, true);
     } catch (e) {
       useStore.setState({ error: (e as Error).message });
     } finally {
@@ -126,15 +126,29 @@ export function RewriteBox({ m }: { m: Message }) {
 
 export function MessageCards({ m }: { m: Message }) {
   const all = useStore((s) => s.suggestions);
-  const cards = useMemo(
-    () => all.filter((x) => x.status === 'pending' && x.target.kind === 'passage' && x.target.messageId === m.id && x.target.swipe === m.activeSwipe).sort((a, b) => a.createdAt - b.createdAt),
+  const mine = useMemo(
+    () => all.filter((x) => x.target.kind === 'passage' && x.target.messageId === m.id && x.target.swipe === m.activeSwipe).sort((a, b) => a.createdAt - b.createdAt),
     [all, m.id, m.activeSwipe],
   );
+  const cards = mine.filter((x) => x.status === 'pending');
+  // Cliché fixes that went straight into the text, so they can be checked or taken back here.
+  const fixed = mine.filter((x) => x.status === 'accepted' && x.source === 'filter');
   const [open, setOpen] = useState(true);
-  if (!cards.length) return null;
+  const [showFixed, setShowFixed] = useState(false);
+  const undoFixes = async () => {
+    for (const x of [...fixed].reverse()) { await undo(x.id); await reject(x.id); }
+  };
+  if (!cards.length && !fixed.length) return null;
   return (
     <div className="msg-cards">
-      <button className="chip" onClick={() => setOpen(!open)}>{cards.length} suggested edit{cards.length === 1 ? '' : 's'} {open ? '▾' : '▸'}</button>
+      {fixed.length > 0 && (
+        <div className="fixed-line muted small">
+          <button className="chip" onClick={() => setShowFixed(!showFixed)} title="See what was changed">✓ {fixed.length} cliché fix{fixed.length === 1 ? '' : 'es'} applied {showFixed ? '▾' : '▸'}</button>
+          <button className="small ghost" onClick={() => void undoFixes()}>Undo {fixed.length === 1 ? 'it' : 'all'}</button>
+        </div>
+      )}
+      {showFixed && fixed.map((x) => <SuggestionCard key={x.id} x={x} />)}
+      {cards.length > 0 && <button className="chip" onClick={() => setOpen(!open)}>{cards.length} suggested edit{cards.length === 1 ? '' : 's'} {open ? '▾' : '▸'}</button>}
       {open && cards.map((x) => <SuggestionCard key={x.id} x={x} />)}
     </div>
   );

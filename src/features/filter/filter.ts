@@ -20,7 +20,8 @@ export function autoLimitFor(chat: Chat | undefined, words?: number): number {
   return words ? Math.min(16, Math.max(2, Math.ceil(words / 200))) : DEFAULT_AUTO_LIMIT;
 }
 
-export const filterMode = (chat?: Chat): FilterMode => chat?.filter?.mode ?? DEFAULT_FILTER_MODE;
+/** The story's own mode, else the one last chosen in any story, so a new story keeps your choice. */
+export const filterMode = (chat?: Chat): FilterMode => chat?.filter?.mode ?? useStore.getState().settings.filterMode ?? DEFAULT_FILTER_MODE;
 
 /** Hits in a text, with this chat's switched-off rules left out. */
 export function clichesIn(text: string, chat?: Chat): Hit[] {
@@ -45,11 +46,17 @@ export function spotsFor(text: string, hits: Hit[]): Spot[] {
   return out;
 }
 
+/** The hits that fall in the first `n` sentences, so the limit counts sentences, not phrases. */
+function hitsForSpots(text: string, hits: Hit[], n: number): Hit[] {
+  return spotsFor(text, hits).slice(0, n).flatMap((s) => s.hits);
+}
+
 const FIX_SYSTEM = `You edit fiction to remove stock phrases that make prose sound machine-written. For each numbered sentence, rewrite it so the flagged phrase is gone, replaced by something specific and plain that fits this story. Keep the meaning, voice, tense, point of view and any dialogue intact; change as little as you can. If a flagged phrase is actually fine where it is, return the sentence unchanged.
 Reply with JSON only: {"fixes":[{"n":1,"text":"<the whole rewritten sentence>"}]}`;
 
-/** Rewrites the sentences around these hits in one request and offers them as cards. */
-export async function fixCliches(chatId: string, messageId: string, hits: Hit[], autoApply = 0): Promise<number> {
+/** Rewrites the sentences around these hits in one request. With `apply`, the fixes go straight into the text
+ * (each stays undoable); otherwise they're offered as cards. */
+export async function fixCliches(chatId: string, messageId: string, hits: Hit[], apply = false): Promise<number> {
   const s = useStore.getState();
   const chat = s.chats.find((c) => c.id === chatId);
   if (!chat || !hits.length) return 0;
@@ -91,8 +98,7 @@ export async function fixCliches(chatId: string, messageId: string, hits: Hit[],
     });
   }
   const added = await addSuggestions(chatId, cards);
-  // Auto mode applies up to its limit; any extra fixes stay as cards.
-  for (const sg of added.slice(0, autoApply)) await accept(sg.id);
+  if (apply) for (const sg of added) await accept(sg.id);
   return added.length;
 }
 
@@ -106,6 +112,7 @@ replyHooks.push(async ({ chatId, message, newText }) => {
   const hits = clichesIn(content, chat).filter((h) => h.from >= start);
   if (!hits.length) return;
   const limit = autoLimitFor(chat, newText.split(/\s+/).filter(Boolean).length);
-  await fixCliches(chatId, message.id, hits.slice(0, limit * 2), mode === 'auto' ? limit : 0);
+  // Auto applies every fix it asked for; the limit caps how many sentences go to the model per reply.
+  await fixCliches(chatId, message.id, hitsForSpots(content, hits, limit), mode === 'auto');
   await tidy(chatId);
 });

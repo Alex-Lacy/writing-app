@@ -404,3 +404,4 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .helper.popped .helper-input { max-width: 860px; width: 100%; margin-inline: auto; }
 /* The Helper picker stays at the top while a long chat scrolls */
 .helper-top { position: sticky; top: -12px; z-index: 2; background: var(--bg2); padding: 12px 0 6px; margin-top: -12px; border-bottom: 1px solid transparent; }
+.fixed-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
