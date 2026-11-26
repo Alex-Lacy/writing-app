@@ -17,6 +17,8 @@ export function HelperTab({ popped = false }: { popped?: boolean }) {
   const hasStory = useStore((s) => s.messages.length > 0);
   const modelName = useStore((s) => jobModelName('helper', currentChat(s)));
   const box = useRef<HTMLTextAreaElement>(null);
+  // Same rule as the story box: Enter sends on a keyboard (if that setting is on), but on touch screens it's a new line.
+  const enterSends = useStore((s) => s.settings.enterToSend) && !(typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches);
   const anyLive = useStore((s) => s.helperLive);
   const helpers = helpersList();
   const fresh = !hasStory && !chat?.writing.background.trim();
@@ -143,7 +145,7 @@ export function HelperTab({ popped = false }: { popped?: boolean }) {
           value={text}
           placeholder={helper.id === 'helper-new-story' ? 'Describe the story you want to write…' : helper.id === 'helper-research' ? 'What should we look into? e.g. "The Witcher: Yennefer and Geralt before the books start"' : 'What would you like to change?'}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && enterSends && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }}
         />
         {live !== undefined
           ? <button onClick={stopHelper} title="Stop; what it has written so far is kept">Stop</button>
