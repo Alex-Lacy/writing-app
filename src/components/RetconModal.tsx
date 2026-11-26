@@ -44,7 +44,7 @@ export function RetconModal() {
         </header>
         <div className="modal-body">
           <p className="muted small">Describe what should be true now. The model reads the part of the story you pick and changes only the sentences that contradict it, as little as it can.</p>
-          <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Subaru is coming back from Pristella, by way of the Sanctuary." />
+          <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Mara arrived by train, not by car, and she has never met the captain." />
           <div className="row retcon-opts">
             <label className="field small"><span>Look through</span>
               <select value={count} onChange={(e) => setCount(Number(e.target.value))}>

@@ -1,5 +1,5 @@
-// Retcon: one note about a fact that changed ("Subaru is coming back from Pristella, by way of
-// the Sanctuary"), checked against a stretch of the story. A model returns only the sentences that
+// Retcon: one note about a fact that changed ("Mara arrived by train, not by car"),
+// checked against a stretch of the story. A model returns only the sentences that
 // contradict it, each with the smallest fix; they come back as one group of edits to apply or ignore.
 import { create } from 'zustand';
 import { parseJson, runJob } from '../ai/jobs';
