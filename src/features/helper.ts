@@ -155,6 +155,7 @@ async function reply(chatId: string, helperId: string) {
       phase = 'queued';
       const res = await runJob({
         job: 'helper',
+        modelKey: useStore.getState().settings.helperModels?.[helper.id],
         chat,
         label: `${helper.name} is thinking`,
         maxTokens: 8000, // room for a whole long outline in one reply

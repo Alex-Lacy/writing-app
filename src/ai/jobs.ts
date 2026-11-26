@@ -33,17 +33,19 @@ export interface JobModel {
 }
 
 /** Resolves the model for a job: the user's override, else a sensible default, else the story's model. */
-export function jobModel(job: Job, chat?: Chat, o: { noOverride?: boolean } = {}): JobModel | undefined {
+export function jobModel(job: Job, chat?: Chat, o: { noOverride?: boolean; key?: string } = {}): JobModel | undefined {
   const s = useStore.getState();
   const storyModel = modelFor(chat, s);
   const storyProvider = providerFor(storyModel, s);
   const fromKey = (key?: string): JobModel | undefined => {
     if (!key) return undefined;
+    // "rec:<id>": a recommended Featherless model, run on the story's Featherless connection.
+    if (key.startsWith('rec:')) return storyProvider && /featherless\.ai/i.test(storyProvider.baseUrl) ? withCaps(storyProvider, key.slice(4), s.models) : undefined;
     const m = s.models.find((x) => x.key === key);
     // A model removed from "Your models" falls back to the default instead of failing.
     return m ? fromEntry(m, providerFor(m, s)) : undefined;
   };
-  const override = o.noOverride ? undefined : fromKey(s.settings.jobModels?.[job]);
+  const override = o.noOverride ? undefined : fromKey(o.key) ?? fromKey(s.settings.jobModels?.[job]);
   if (override) return override;
   // Rewrites use the story's own model, to keep its voice.
   const def = FEATHERLESS_DEFAULT[job];
@@ -52,11 +54,21 @@ export function jobModel(job: Job, chat?: Chat, o: { noOverride?: boolean } = {}
 }
 
 /** A short name for a job's model: its nickname, else the model id without the organisation. */
-export function jobModelName(job: Job, chat?: Chat, o: { noOverride?: boolean } = {}): string | undefined {
+export function jobModelName(job: Job, chat?: Chat, o: { noOverride?: boolean; key?: string } = {}): string | undefined {
   const m = jobModel(job, chat, o);
   if (!m) return undefined;
   const s = useStore.getState();
   return s.models.find((x) => x.providerId === m.provider.id && x.modelId === m.modelId)?.nickname || RECOMMENDED_FEATHERLESS.find((r) => r.id === m.modelId)?.nickname || m.modelId.split('/').pop();
+}
+
+/** Models a Helper can be switched to: your models, plus the recommended Featherless ones when the story runs there. */
+export function pickableModels(chat?: Chat): { key: string; name: string }[] {
+  const s = useStore.getState();
+  const mine = s.models.map((m) => ({ key: m.key, name: m.nickname || m.modelId.split('/').pop()! }));
+  const p = providerFor(modelFor(chat, s), s);
+  if (!p || !/featherless\.ai/i.test(p.baseUrl)) return mine;
+  const have = new Set(s.models.filter((m) => m.providerId === p.id).map((m) => m.modelId));
+  return [...mine, ...RECOMMENDED_FEATHERLESS.filter((r) => !have.has(r.id)).map((r) => ({ key: `rec:${r.id}`, name: r.nickname }))];
 }
 
 function fromEntry(m: ModelEntry, p?: ProviderConfig): JobModel | undefined {
@@ -108,6 +120,8 @@ export const jobRunning = () => running?.job;
 
 export interface RunJobOptions {
   job: Job;
+  /** A specific model for this run (a "Your models" key or "rec:<id>"), over the job's own. */
+  modelKey?: string;
   chat?: Chat;
   messages: WireMessage[];
   /** Shown in the status line while it runs. */
@@ -142,7 +156,7 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
   const run = async (): Promise<JobResult> => {
     await waitForStoryReply();
     if (o.signal?.aborted) throw new DOMException('Stopped before it started', 'AbortError');
-    const m = jobModel(o.job, o.chat);
+    const m = jobModel(o.job, o.chat, { key: o.modelKey });
     if (!m) throw new Error('Pick a model first (Settings, then Models).');
     const id = Math.random().toString(36).slice(2);
     const abort = new AbortController();

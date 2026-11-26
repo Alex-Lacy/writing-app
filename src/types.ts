@@ -331,6 +331,8 @@ export interface AppSettings {
   syncTurn?: { urls: string; username?: string; credential?: string };
   /** Per-job model overrides (Settings, Models, Advanced). */
   jobModels?: JobModels;
+  /** A model picked for one Helper (by Helper id), over the Helper job's model. */
+  helperModels?: Record<string, string>;
   /** Defaults for new chats. */
   defaultUpdatesEvery?: number;
   defaultAutoSummary?: boolean;

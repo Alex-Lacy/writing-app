@@ -333,7 +333,7 @@ function JobModelsSection() {
       <p className="muted small">
         Side jobs are the Helper, Proofread, suggested updates, summaries and Cliché fixes. On Featherless they use
         a strong model for the Helper and Proofread and a fast one for the rest; with other providers they use your
-        story model. Rewrites always use the story model unless you pick one here.
+        story model. Rewrites always use the story model unless you pick one here. Each Helper can also pick its own model, in the Helper panel.
       </p>
       <div className="grid2">
         {(Object.keys(JOB_LABEL) as Job[]).map((job) => (

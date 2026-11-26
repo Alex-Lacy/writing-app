@@ -411,3 +411,5 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .sg-diff del { background: rgba(212, 112, 107, 0.18); color: var(--muted, #999); text-decoration-color: rgba(212, 112, 107, 0.7); border-radius: 3px; }
 .sg-diff ins { background: rgba(111, 157, 106, 0.25); text-decoration: none; border-radius: 3px; }
 .sg-diff del + ins { margin-left: 3px; }
+.helper-model { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
+.helper-model select { flex: 1; min-width: 0; max-width: 320px; }

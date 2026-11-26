@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { askHelper, clearThread, deleteHelperMessage, editHelperMessage, helpersList, retryHelper, stopHelper } from '../../features/helper';
 import { renderMarkdown } from '../../lib/markdown';
-import { currentChat, saved, ui, useStore } from '../../store/store';
-import { jobModelName } from '../../ai/jobs';
+import { currentChat, saved, saveSettings, ui, useStore } from '../../store/store';
+import { jobModelName, pickableModels } from '../../ai/jobs';
 import { SuggestionCard } from './SuggestionCard';
 import { useStickyScroll } from '../useStickyScroll';
 import { useDraft } from '../useDraft';
@@ -15,7 +15,6 @@ export function HelperTab({ popped = false }: { popped?: boolean }) {
   const threads = useStore((s) => s.helperThreads);
   const suggestions = useStore((s) => s.suggestions);
   const hasStory = useStore((s) => s.messages.length > 0);
-  const modelName = useStore((s) => jobModelName('helper', currentChat(s)));
   const box = useRef<HTMLTextAreaElement>(null);
   // Same rule as the story box: Enter sends on a keyboard (if that setting is on), but on touch screens it's a new line.
   const enterSends = useStore((s) => s.settings.enterToSend) && !(typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches);
@@ -25,6 +24,11 @@ export function HelperTab({ popped = false }: { popped?: boolean }) {
   // Each story remembers the Helper you last used with it, through reloads.
   const last = chat ? saved(`lastHelper:${chat.id}`) : undefined;
   const helper = helpers.find((h) => h.id === last) ?? helpers.find((h) => h.id === chosen) ?? helpers.find((h) => h.id === (fresh ? 'helper-new-story' : 'helper-setup'))!;
+  const picked = useStore((s) => s.settings.helperModels?.[helper.id]);
+  const models = useStore((s) => s.models);
+  const defaultName = jobModelName('helper', chat);
+  const choices = useMemo(() => pickableModels(chat), [chat, models]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pickModel = (key: string) => saveSettings({ helperModels: { ...useStore.getState().settings.helperModels, [helper.id]: key || undefined } as Record<string, string> });
   // Unsent text is kept per story and Helper, through tab switches and reloads.
   const [text, setText] = useDraft(chat ? `helper:${chat.id}:${helper.id}` : undefined);
   // Grows upward with what's typed, up to a third of the Helper's area, then scrolls inside.
@@ -87,9 +91,15 @@ export function HelperTab({ popped = false }: { popped?: boolean }) {
         {count > 0 && <button className="small ghost" onClick={() => confirm('Clear this conversation? Its open suggestions stay in Suggestions.') && clearThread(chat.id, helper.id)}>Start over</button>}
       </div>
       <p className="muted small">
-        {helper.blurb} It sees this story's setup and recent text, and suggests changes for you to accept.{' '}
-        {modelName && <span title="Change it in Settings, Advanced: models for side jobs">Model: <b>{modelName}</b>.</span>}
+        {helper.blurb} It sees this story's setup and recent text, and suggests changes for you to accept.
       </p>
+      <label className="helper-model small">
+        <span className="muted">Model</span>
+        <select value={picked && choices.some((c) => c.key === picked) ? picked : ''} onChange={(e) => void pickModel(e.target.value)} title="The model this Helper uses. Pick a faster one for quick edits; remembered for this Helper.">
+          <option value="">{defaultName ? `Default (${defaultName})` : 'Default'}</option>
+          {choices.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
+        </select>
+      </label>
       <div className="helper-log">
         {thread?.messages.map((m, i) => (
           m.role === 'tool' ? (
