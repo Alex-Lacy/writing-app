@@ -76,7 +76,7 @@ export function HelperTab({ popped = false }: { popped?: boolean }) {
 
   return (
     <div className={`panel-body helper${popped ? ' popped' : ''}`} ref={scroll.ref} onScroll={scroll.onScroll}>
-      <div className="row">
+      <div className="row helper-top">
         <select value={helper.id} onChange={(e) => ui.openHelper(e.target.value)}>
           {helpers.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
         </select>
