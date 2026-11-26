@@ -1,3 +1,5 @@
+import { notesFit, SUMMARY_PARTS } from './helperContext';
+import { PINNED } from '../ai/budget';
 // Auto-summary. When the story nears the context limit, the oldest stretch that is still sent in
 // full gets its own short summary, written from the original text. Parts stack like chapter
 // recaps; only when the parts themselves fill their budget are the oldest merged into one
@@ -10,7 +12,7 @@ import { uid } from '../lib/id';
 import { buildFor, contextLimitFor, replyHooks, updateChat, useStore } from '../store/store';
 import { accept, addSuggestions } from '../store/suggestions';
 import type { Chat, Message, SummaryPart } from '../types';
-import { msgText, setupText, transcript } from './storyText';
+import { msgText, transcript } from './storyText';
 
 /** Summarise when the prompt uses this share of the room it has. */
 export const SUMMARY_TRIGGER = 0.85;
@@ -57,12 +59,13 @@ async function writePart(chat: Chat, stretch: Message[]): Promise<SummaryPart> {
     job: 'summary',
     chat,
     label: 'Summarising older story',
-    maxTokens: 900,
     temperature: 0.3,
-    messages: [
-      { role: 'system', content: SYSTEM },
-      { role: 'user', content: `# Notes for context (do not summarise these)\n${setupText(chat, { codex: 'names' }) || '(none)'}\n\n# Story stretch to summarise\n${transcript(stretch)}\n\nSummarise only the stretch above in about ${target} words.` },
-    ],
+    messages: [],
+    fit: notesFit({
+      head: SYSTEM, chat, codex: 'names', parts: SUMMARY_PARTS, reply: 900, replyFloor: 600,
+      material: { label: 'Story stretch to summarise', text: transcript(stretch), keep: PINNED, floor: 0 },
+      task: `Summarise only the story stretch above in about ${target} words. The notes are context only: don't summarise them.`,
+    }),
   });
   return { id: uid(), messageIds: stretch.map((m) => m.id), text: res.text, createdAt: Date.now() };
 }

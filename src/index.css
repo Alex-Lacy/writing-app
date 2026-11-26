@@ -423,3 +423,10 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .retcon-top { position: sticky; top: -12px; z-index: 2; background: var(--bg2); padding: 8px 0; }
 .retcon-edit { margin-bottom: 6px; }
 .helper-model .helper-think { flex: 0 0 auto; max-width: 140px; }
+/* What the Helper saw in its last request */
+.helper-ctx { margin: 0 0 6px; }
+.helper-ctx summary { cursor: pointer; }
+.helper-ctx table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.helper-ctx td { padding: 1px 6px 1px 0; }
+.helper-ctx td:nth-child(2) { text-align: right; white-space: nowrap; }
+.helper-ctx tr.cut td:first-child { color: var(--fg); font-weight: 600; }

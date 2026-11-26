@@ -6,6 +6,8 @@ import { jobModel, jobModelName, pickableModels } from '../../ai/jobs';
 import { SuggestionCard } from './SuggestionCard';
 import { useStickyScroll } from '../useStickyScroll';
 import { useDraft } from '../useDraft';
+import { useHelperContext } from '../../features/helperContext';
+import type { BudgetResult } from '../../ai/budget';
 import { accept } from '../../store/suggestions';
 
 /** Talk to a Helper about this story; its proposed changes show as cards right in the conversation. */
@@ -19,6 +21,7 @@ export function HelperTab({ popped = false }: { popped?: boolean }) {
   // Same rule as the story box: Enter sends on a keyboard (if that setting is on), but on touch screens it's a new line.
   const enterSends = useStore((s) => s.settings.enterToSend) && !(typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches);
   const anyLive = useStore((s) => s.helperLive);
+  const seen = useHelperContext((s) => s.last);
   const helpers = helpersList();
   const fresh = !hasStory && !chat?.writing.background.trim();
   // Each story remembers the Helper you last used with it, through reloads.
@@ -111,6 +114,7 @@ export function HelperTab({ popped = false }: { popped?: boolean }) {
       <p className="muted small">
         {helper.blurb} It sees this story's setup and recent text, and suggests changes for you to accept.
       </p>
+      {seen && seen.chatId === chat.id && seen.helperId === helper.id && <HelperSees b={seen} />}
       <div className="helper-log">
         {thread?.messages.map((m, i) => (
           m.role === 'tool' ? (
@@ -202,5 +206,32 @@ function HelperProgress({ live }: { live: NonNullable<ReturnType<typeof useStore
       <span className="spinner" /> {what} · {time}
       {secs > 20 && live.phase !== 'writing' && block === undefined && <span> · You can close this panel; the reply will wait here.</span>}
     </p>
+  );
+}
+
+const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+
+/** What went into the Helper's last request, and what had to give way to fit the model's window. */
+function HelperSees({ b }: { b: BudgetResult }) {
+  const cut = b.report.filter((r) => r.status !== 'full');
+  return (
+    <details className="helper-ctx small">
+      <summary className="muted">
+        Last request: {k(b.total)}{b.limit ? ` of ${k(b.limit)}` : ''} tokens, {k(b.reply)} for the reply
+        {cut.length || b.folded ? ` · ${[cut.length && `${cut.length} part${cut.length === 1 ? '' : 's'} shortened`, b.folded && `${b.folded} older message${b.folded === 1 ? '' : 's'} recapped`].filter(Boolean).join(', ')}` : ' · nothing left out'}
+      </summary>
+      <table>
+        <tbody>
+          {b.report.map((r) => (
+            <tr key={r.id} className={r.status === 'full' ? '' : 'cut'}>
+              <td>{r.label.replace(/ \(.*\)$/, '')}</td>
+              <td>{r.status === 'full' ? k(r.tokens) : `${k(r.tokens)} of ${k(r.full)}`}</td>
+              <td className="muted">{r.status === 'full' ? '' : r.status}</td>
+            </tr>
+          ))}
+          {b.folded > 0 && <tr className="cut"><td>Earlier chat</td><td>{b.folded} message{b.folded === 1 ? '' : 's'}</td><td className="muted">recapped</td></tr>}
+        </tbody>
+      </table>
+    </details>
   );
 }

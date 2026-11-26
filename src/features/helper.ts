@@ -2,7 +2,6 @@
 // setup and recent text, talks with you, and proposes changes as suggestion cards. It never
 // writes story text and never changes anything without your Accept.
 import { parseJson, runJob } from '../ai/jobs';
-import { estimateTokens } from '../context/tokens';
 import { repo } from '../db/db';
 import { uid } from '../lib/id';
 import { useStore } from '../store/store';
@@ -14,7 +13,7 @@ type Phase = 'queued' | 'sent' | 'busy' | 'thinking' | 'writing' | 'looking';
 /** Rounds of lookups before a research Helper must answer. */
 const MAX_LOOKUP_ROUNDS = 4;
 import { BUILTIN_HELPERS, PROTOCOL } from './starters';
-import { setupText, transcript } from './storyText';
+import { helperFit } from './helperContext';
 import { toSuggestions, type Proposal } from './updates';
 
 /** Built-in Helpers (or the person's edited copies) followed by their own. */
@@ -22,9 +21,6 @@ export function helpersList(): HelperDef[] {
   const mine = useStore.getState().settings.helpers ?? [];
   return [...BUILTIN_HELPERS.map((b) => ({ ...b, ...mine.find((m) => m.id === b.id) })), ...mine.filter((m) => !BUILTIN_HELPERS.some((b) => b.id === m.id))];
 }
-
-/** How much recent story a Helper sees, in tokens. */
-const RECENT_BUDGET = 6000;
 
 const CHANGES = /```changes\s*([\s\S]*?)(```|$)/i;
 
@@ -124,17 +120,9 @@ async function reply(chatId: string, helperId: string) {
   const thread = await threadFor(chatId, helperId);
   if (!chat || !helper || thread.messages.at(-1)?.role === 'assistant' || !thread.messages.length) return;
 
-  // Recent story, newest last, within budget.
-  const msgs = chatId === s.currentChatId ? s.messages : await repo.messages(chatId);
-  const recent: typeof msgs = [];
-  let used = 0;
-  for (const m of [...msgs].reverse()) {
-    used += estimateTokens(m.swipes[m.activeSwipe]?.content ?? '');
-    if (used > RECENT_BUDGET && recent.length) break;
-    recent.unshift(m);
-  }
+  // Everything the Helper might see; helperFit decides what fits the model's window (per Helper).
+  const story = chatId === s.currentChatId ? s.messages : await repo.messages(chatId);
   const others = s.chats.filter((c) => c.id !== chatId).slice(0, 30).map((c) => `#${c.num} ${c.title}`).join(', ');
-  const context = `# This story: #${chat.num} "${chat.title}"\n${setupText(chat) || '(Nothing set up yet.)'}\n\n# Recent story\n${transcript(recent) || '(No story written yet.)'}${others ? `\n\n# Other stories\n${others}` : ''}`;
 
   helperAbort = new AbortController();
   discard = false;
@@ -144,7 +132,7 @@ async function reply(chatId: string, helperId: string) {
   let doing = '';
   const show = (t: string) => setLive({ chatId, helperId, text: t, startedAt, phase, reasoning: thought, doing });
   show('');
-  const system = `${helper.instructions}\n${PROTOCOL}${helper.research ? researchProtocol() : ''}\n\n${context}`;
+  const head = `${helper.instructions}\n${PROTOCOL}${helper.research ? researchProtocol() : ''}\n\n# This story: #${chat.num} "${chat.title}"`;
   let text = '';
   let lastPaint = 0;
   try {
@@ -159,7 +147,6 @@ async function reply(chatId: string, helperId: string) {
         think: helperThinks(helper.id),
         chat,
         label: `${helper.name} is thinking`,
-        maxTokens: 8000, // room for a whole long outline in one reply
         temperature: 0.6,
         signal: helperAbort.signal,
         onText: (t) => {
@@ -177,10 +164,11 @@ async function reply(chatId: string, helperId: string) {
             show(text);
           }
         },
-        messages: [
-          { role: 'system', content: round >= MAX_LOOKUP_ROUNDS ? `${system}\n\nYou've used all your lookups: answer now with what you found.` : system },
-          ...convo.map((m) => (m.role === 'tool' ? { role: 'user' as const, content: `# Lookup results (from the app, not the person)\n${m.content}` } : { role: m.role === 'user' ? ('user' as const) : ('assistant' as const), content: m.content })),
-        ],
+        messages: [],
+        fit: helperFit({
+          head: round >= MAX_LOOKUP_ROUNDS ? `${head}\n\nYou've used all your lookups: answer now with what you found.` : head,
+          chat, helper, convo, story, others, reply: 8000, replyFloor: 3000,
+        }),
       });
       text = res.text;
       const { say, lookups } = helper.research && round < MAX_LOOKUP_ROUNDS ? splitLookups(text) : { say: text, lookups: [] };

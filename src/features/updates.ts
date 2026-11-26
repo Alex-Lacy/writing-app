@@ -1,5 +1,6 @@
 // Suggested updates: after enough new story, a quick model proposes changes to the Codex and
 // Background (a new character, a fact that changed, an entry that's out of date) as cards.
+import { notesFit, UPDATES_PARTS } from './helperContext';
 import { parseJson, runJob } from '../ai/jobs';
 import { countWords, LENGTH_ORDER, type LengthBucket } from '../context/length';
 import { repo } from '../db/db';
@@ -7,7 +8,7 @@ import { newEntry } from '../store/codexStore';
 import { codexBooksFor, DEFAULT_UPDATES_EVERY, replyHooks, updateChat, useStore } from '../store/store';
 import { reject, addSuggestions, OWN_BOOK } from '../store/suggestions';
 import type { Chat, Message, StyleModule, Suggestion } from '../types';
-import { setupText, transcript } from './storyText';
+import { transcript } from './storyText';
 
 export type Proposal =
   | { type: 'codex-add'; name: string; keys?: string[]; text: string; reason?: string }
@@ -55,12 +56,13 @@ export async function checkForUpdates(chatId: string): Promise<number> {
     job: 'updates',
     chat,
     label: 'Checking for note updates',
-    maxTokens: 1500,
     temperature: 0.3,
-    messages: [
-      { role: 'system', content: SYSTEM },
-      { role: 'user', content: `# Current notes\n${setupText(chat, { codex: 'full', summary: false }) || '(none yet)'}\n\n# New story text\n${text}` },
-    ],
+    messages: [],
+    fit: notesFit({
+      head: SYSTEM, chat, codex: 'full', parts: UPDATES_PARTS, reply: 1500, replyFloor: 1000,
+      material: { label: 'New story text', text, keep: 90, floor: 3000 },
+      task: 'Compare the new story text with the current notes above and suggest updates.',
+    }),
   });
   await updateChat({ checkedUpTo: all.at(-1)?.id, wordsSinceCheck: 0 }, chat.id);
   const props = parseJson<{ suggestions?: Proposal[] }>(res.text)?.suggestions ?? [];

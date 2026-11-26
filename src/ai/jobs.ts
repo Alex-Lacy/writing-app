@@ -127,6 +127,9 @@ export interface RunJobOptions {
   modelKey?: string;
   /** Whether a model that can think first should (default: per job). */
   think?: boolean;
+  /** Builds the request for the model's window (limit in tokens, if known; scale corrects our
+   * token estimate). Used instead of `messages` and `maxTokens`; an error stops the job. */
+  fit?: (limit: number | undefined, scale: number) => { messages: WireMessage[]; maxTokens: number; error?: string };
   chat?: Chat;
   messages: WireMessage[];
   /** Shown in the status line while it runs. */
@@ -194,6 +197,7 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
       // the real limit (and how far off our token estimate was) for one more try.
       let scale = 1;
       let fitTries = 0;
+      let lastSent: WireMessage[] = [];
       const extra = () => ({ ...jobThinkingExtra(o.job, m, think), ...o.extra });
       const thinkRoom = () => (m.thinking && (m.thinking === 'always' || think) ? 4096 : 0);
       let stalled = '';
@@ -212,8 +216,13 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
         try {
           o.onProgress?.({ phase: 'sent', reasoning: reasoning.length });
           watch(FIRST_BYTE_MS, `${m.provider.name} didn't start the reply within ${FIRST_BYTE_MS / 60_000} minutes (the model may be busy). Try again in a moment.`);
-          const fit = fitRequest(o.messages, (o.maxTokens ?? 2048) + thinkRoom(), knownLimit(m.modelId, m.contextLength), scale);
-          if (fit.maxOut < 1024) throw new Error(`This is too long for ${m.modelId.split('/').pop()}'s ${knownLimit(m.modelId, m.contextLength)?.toLocaleString()}-token window on your plan, even without the earlier conversation. Pick a model with a bigger window, or shorten the story's setup or Codex.`);
+          const limit = knownLimit(m.modelId, m.contextLength);
+          // Unknown window: assume a common plan size, so a Helper doesn't send everything it could.
+          const built = o.fit?.((limit ?? 32768) - thinkRoom(), scale);
+          if (built?.error) throw new Error(built.error);
+          const fit = built ? { messages: built.messages, maxOut: built.maxTokens + thinkRoom() } : fitRequest(o.messages, (o.maxTokens ?? 2048) + thinkRoom(), limit, scale);
+          lastSent = fit.messages;
+          if (!built && fit.maxOut < Math.min(1024, (o.maxTokens ?? 2048) + thinkRoom())) throw new Error(`This is too long for ${m.modelId.split('/').pop()}'s ${knownLimit(m.modelId, m.contextLength)?.toLocaleString()}-token window on your plan, even without the earlier conversation. Pick a model with a bigger window, or shorten the story's setup or Codex.`);
           for await (const ev of streamChat(m.provider, m.modelId, fit.messages, { maxTokens: fit.maxOut, temperature: o.temperature ?? 0.5 }, step.signal, extra(), !!thinkRoom())) {
             watch(SILENT_MS, `The reply stopped arriving for ${SILENT_MS / 60_000} minutes, so it was ended. Try again.`);
             if (ev.type === 'moved') {
@@ -236,8 +245,7 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
           const ce = !text && !abort.signal.aborted ? contextError((e as Error).message ?? '') : undefined;
           if (ce && fitTries++ < 2) {
             learnLimit(m.modelId, ce.limit);
-            const sent = fitRequest(o.messages, (o.maxTokens ?? 2048) + thinkRoom(), knownLimit(m.modelId, m.contextLength), scale).messages;
-            const est = sent.reduce((n, x) => n + estimateTokens(typeof x.content === 'string' ? x.content : JSON.stringify(x.content)) + 4, 0);
+            const est = lastSent.reduce((n, x) => n + estimateTokens(typeof x.content === 'string' ? x.content : JSON.stringify(x.content)) + 4, 0);
             scale = ce.prompt && est ? Math.max(scale, ce.prompt / est) * 1.03 : scale * 1.15;
             continue;
           }

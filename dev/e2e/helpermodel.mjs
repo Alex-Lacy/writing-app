@@ -23,7 +23,7 @@ await p.waitForTimeout(800);
 const sent = [];
 p.on('request', (r) => { if (r.url().includes('/chat/completions')) sent.push(JSON.parse(r.postData() || '{}').model); });
 await p.evaluate(async () => { const st = await import('/src/store/store.ts'); st.ui.openHelper('helper-codex'); });
-const pick = p.locator('.helper-model select');
+const pick = p.locator('.helper-model select').first();
 console.log('options:', await pick.locator('option').allInnerTexts());
 await pick.selectOption({ index: 2 });
 const chosen = await pick.locator('option:checked').innerText();

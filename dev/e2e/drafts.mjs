@@ -20,7 +20,7 @@ console.log('story 1 composer:', await p.locator('.composer textarea').inputValu
 await p.reload(); await p.waitForTimeout(800);
 await p.locator('.modal-head .icon').click().catch(() => {});
 await p.locator('.chat-item').nth(1).click();
-await p.locator('.panel-btn').click().catch(() => {});
+if (!(await p.locator('.panel-tabs').count())) await p.locator('.panel-btn').click().catch(() => {});
 await p.locator('.panel-tabs button:has-text("Helper")').click();
 console.log('after reload: story', await p.locator('.composer textarea').inputValue(), '| helper', await p.locator('.helper-input textarea').inputValue());
 console.log('errors:', errs);
