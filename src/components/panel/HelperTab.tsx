@@ -9,7 +9,7 @@ import { useDraft } from '../useDraft';
 import { accept } from '../../store/suggestions';
 
 /** Talk to a Helper about this story; its proposed changes show as cards right in the conversation. */
-export function HelperTab() {
+export function HelperTab({ popped = false }: { popped?: boolean }) {
   const chat = useStore((s) => currentChat(s));
   const chosen = useStore((s) => s.helperId);
   const threads = useStore((s) => s.helperThreads);
@@ -25,13 +25,32 @@ export function HelperTab() {
   const helper = helpers.find((h) => h.id === last) ?? helpers.find((h) => h.id === chosen) ?? helpers.find((h) => h.id === (fresh ? 'helper-new-story' : 'helper-setup'))!;
   // Unsent text is kept per story and Helper, through tab switches and reloads.
   const [text, setText] = useDraft(chat ? `helper:${chat.id}:${helper.id}` : undefined);
-  // Grows upward with what's typed (the box sits at the bottom), up to half the window.
+  // Grows upward with what's typed, up to a third of the Helper's area, then scrolls inside.
+  // Dragging the grip on its top edge sets a fixed height instead (double-click to go back to auto).
+  const [fixed, setFixed] = useState(() => Number(saved('ui:helperBox')) || 0);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
+    if (fixed) { el.style.height = `${fixed}px`; return; }
+    const area = el.closest('.helper')?.clientHeight || window.innerHeight;
     el.style.height = 'auto';
-    el.style.height = `${Math.min(Math.max(el.scrollHeight, 64), window.innerHeight * 0.5)}px`;
-  }, [text]);
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 64), Math.max(96, area / 3))}px`;
+  }, [text, fixed, popped]);
+  const grip = (e: React.PointerEvent) => {
+    const el = box.current;
+    if (!el) return;
+    e.preventDefault();
+    const y0 = e.clientY, h0 = el.offsetHeight;
+    const max = (el.closest('.helper')?.clientHeight || window.innerHeight) * 0.8;
+    let h = h0;
+    const move = (m: PointerEvent) => { h = Math.round(Math.min(max, Math.max(48, h0 + y0 - m.clientY))); el.style.height = `${h}px`; };
+    const up = () => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up);
+      setFixed(h); try { localStorage.setItem('ui:helperBox', String(h)); } catch { /* ignore */ }
+    };
+    addEventListener('pointermove', move); addEventListener('pointerup', up);
+  };
+  const autoSize = () => { setFixed(0); try { localStorage.removeItem('ui:helperBox'); } catch { /* ignore */ } };
   const thread = chat && threads.find((t) => t.chatId === chat.id && t.helperId === helper.id);
   // The reply runs in the background, so it is shown from the store: closing the panel loses nothing.
   const mine = anyLive && chat && anyLive.chatId === chat.id && anyLive.helperId === helper.id ? anyLive : undefined;
@@ -54,12 +73,15 @@ export function HelperTab() {
   const count = thread?.messages.length ?? 0;
 
   return (
-    <div className="panel-body helper" ref={scroll.ref} onScroll={scroll.onScroll}>
+    <div className={`panel-body helper${popped ? ' popped' : ''}`} ref={scroll.ref} onScroll={scroll.onScroll}>
       <div className="row">
         <select value={helper.id} onChange={(e) => ui.openHelper(e.target.value)}>
           {helpers.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
         </select>
         <span className="spacer" />
+        {popped
+          ? <button className="small ghost" onClick={() => ui.popHelper(false)} title="Put the Helper back in the side panel">⇲ Back to sidebar</button>
+          : <button className="small ghost helper-pop" onClick={() => ui.popHelper(true)} title="Trial: open the Helper in a large window">⇱ Pop out</button>}
         {count > 0 && <button className="small ghost" onClick={() => confirm('Clear this conversation? Its open suggestions stay in Suggestions.') && clearThread(chat.id, helper.id)}>Start over</button>}
       </div>
       <p className="muted small">
@@ -114,6 +136,7 @@ export function HelperTab() {
       </div>
       <div className="helper-input">
         {scroll.away && <button className="jump-latest" onClick={scroll.jump}>{live !== undefined ? '↓ Follow the reply' : '↓ Latest'}</button>}
+        <div className="helper-grip" onPointerDown={grip} onDoubleClick={autoSize} title="Drag to resize the message box. Double-click to size it automatically." />
         <textarea
           ref={box}
           rows={2}

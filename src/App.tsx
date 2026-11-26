@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { ChatView } from './components/ChatView';
 import { ContextModal } from './components/ContextModal';
+import { HelperWindow } from './components/HelperWindow';
 import { SettingsModal } from './components/SettingsModal';
 import { LibraryModal } from './components/LibraryModal';
 import { CompileModal } from './components/CompileModal';
@@ -22,6 +23,7 @@ export default function App() {
   const libraryOpen = useStore((s) => s.libraryOpen);
   const compileOpen = useStore((s) => s.compileOpen);
   const syncOpen = useStore((s) => s.syncOpen);
+  const helperPopped = useStore((s) => s.helperPopped);
   const theme = useStore((s) => s.settings.theme);
 
   useEffect(() => { void init(); }, []);
@@ -62,6 +64,7 @@ export default function App() {
       </main>
       {panel !== 'none' && !focus && <StoryPanel />}
       {focus && <button className="focus-exit" onClick={() => ui.setFocus(false)} title="Leave full-screen reading (Esc)">⤡</button>}
+      {helperPopped && !focus && <HelperWindow />}
       {contextOpen && <ContextModal />}
       {settingsOpen && <SettingsModal />}
       {libraryOpen && <LibraryModal />}

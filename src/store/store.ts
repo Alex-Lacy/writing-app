@@ -49,6 +49,8 @@ interface State {
   focus: boolean;
   /** Helper shown in the Helper tab. */
   helperId?: string;
+  /** Trial: the Helper chat shown in a large window instead of the side panel. */
+  helperPopped: boolean;
   lastContext?: BuildResult;
   /** Message (or highlighted part of one) the Rewrite box is open for. */
   rewriteTarget?: RewriteTarget;
@@ -87,6 +89,7 @@ export const useStore = create<State>()(() => ({
   messages: [],
   sidebarOpen: false,
   // The side panel reopens after a reload on wide screens, where it doesn't cover the story.
+  helperPopped: saved('ui:helperPop') === '1',
   panel: (typeof innerWidth !== 'undefined' && innerWidth > 860 && (saved('ui:panel') as Panel)) || 'none',
   settingsOpen: false,
   settingsTab: 'providers',
@@ -768,8 +771,16 @@ export const ui = {
   openHelper: (helperId: string) => {
     const id = get().currentChatId;
     if (id) save(`lastHelper:${id}`, helperId);
+    if (get().helperPopped) return set({ helperId, helperDone: undefined });
     save('ui:panel', 'chat-settings'); save('ui:panelTab', 'helper');
     set({ panel: 'chat-settings', panelTab: 'helper', helperId, helperDone: undefined });
+  },
+  /** Moves the Helper chat between the side panel and its own large window. Nothing is lost either way. */
+  popHelper: (popped: boolean) => {
+    save('ui:helperPop', popped ? '1' : '');
+    if (popped) return set({ helperPopped: true, helperDone: undefined });
+    save('ui:panel', 'chat-settings'); save('ui:panelTab', 'helper');
+    set({ helperPopped: false, panel: 'chat-settings', panelTab: 'helper' });
   },
   openSettings: (open: boolean, tab: SettingsTab = 'providers') => set({ settingsOpen: open, settingsTab: tab }),
   setSettingsTab: (tab: SettingsTab) => set({ settingsTab: tab }),

@@ -27,6 +27,7 @@ const TABS: [PanelTab, string][] = [
 /** The right-hand panel: everything that shapes one story, one tab per tool. */
 export function StoryPanel() {
   const tab = useStore((s) => s.panelTab);
+  const popped = useStore((s) => s.helperPopped);
   const chat = useStore((s) => currentChat(s));
   const pending = useStore((s) => s.suggestions.filter((x) => x.chatId === s.currentChatId && x.status === 'pending').length);
   const words = useStore((s) => s.messages.reduce((n, m) => n + wordsIn(m), 0));
@@ -74,7 +75,9 @@ export function StoryPanel() {
       </nav>
       {tab === 'setup' && <SetupTab />}
       {tab === 'codex' && <CodexTab />}
-      {tab === 'helper' && <HelperTab />}
+      {tab === 'helper' && (popped
+        ? <div className="panel-body"><p className="muted">The Helper is open in its own window.</p><button onClick={() => ui.popHelper(false)}>Bring it back here</button></div>
+        : <HelperTab />)}
       {tab === 'filter' && <FilterTab />}
       {tab === 'suggestions' && <SuggestionsTab />}
     </aside>
