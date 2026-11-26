@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fixCliches } from '../features/filter/filter';
 import { locate } from './messageHooks';
-import type { Hit } from '../features/filter/rules';
+import { hitKey, type Hit } from '../features/filter/rules';
 import { proofread, rewriteMessage, rewritePassage } from '../features/rewrite';
-import { ui, useStore } from '../store/store';
+import { ignoreCliches, ui, useStore } from '../store/store';
 import { nearest, reject, undo } from '../store/suggestions';
 import { activeSwipe, type Message } from '../types';
 import { SuggestionCard } from './panel/SuggestionCard';
@@ -37,11 +37,15 @@ export function ClicheChip({ m, hits }: { m: Message; hits: Hit[] }) {
           {hits.map((h, i) => (
             <div key={i} className="cliche-item">
               <span><mark>{h.text}</mark> <span className="muted small">{h.description}</span></span>
-              <button className="small ghost" disabled={busy} onClick={() => fix([h])}>Fix</button>
+              <span className="cliche-btns">
+                <button className="small ghost" disabled={busy} onClick={() => fix([h])}>Fix</button>
+                <button className="small ghost" disabled={busy} onClick={() => void ignoreCliches(m.id, [hitKey(h)])} title="Leave this one as it is and unmark it">Ignore</button>
+              </span>
             </div>
           ))}
           <div className="row">
             <button className="small" disabled={busy} onClick={() => fix(hits)}>{busy ? 'Fixing…' : 'Fix all'}</button>
+            <button className="small ghost" disabled={busy} onClick={() => void ignoreCliches(m.id, hits.map(hitKey))} title="Leave them all as they are and clear the list">Ignore all</button>
             <button className="small ghost" onClick={() => ui.openPanel('filter')}>Filter settings</button>
           </div>
         </div>

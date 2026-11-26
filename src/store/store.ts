@@ -728,6 +728,13 @@ export async function deleteSwipe(id: string) {
   await putMessage({ ...m, swipes, activeSwipe: Math.min(m.activeSwipe, swipes.length - 1) });
 }
 
+/** Leaves these Cliché Filter hits in this version of the message unmarked. */
+export async function ignoreCliches(id: string, keys: string[]) {
+  const m = get().messages.find((x) => x.id === id);
+  if (!m) return;
+  await putMessage({ ...m, swipes: m.swipes.map((s, i) => (i === m.activeSwipe ? { ...s, ignored: [...new Set([...(s.ignored ?? []), ...keys])] } : s)) });
+}
+
 export async function editMessage(id: string, content: string) {
   const m = get().messages.find((x) => x.id === id);
   if (!m) return;

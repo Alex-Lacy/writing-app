@@ -1,7 +1,7 @@
 // Hooks and helpers for MessageItem / MessageTools (kept apart so those files only export components).
 import { useEffect, useMemo, type RefObject } from 'react';
 import { clichesIn, filterMode } from '../features/filter/filter';
-import type { Hit } from '../features/filter/rules';
+import { hitKey, type Hit } from '../features/filter/rules';
 import { currentChat, useStore } from '../store/store';
 import { activeSwipe, type Message } from '../types';
 
@@ -50,7 +50,8 @@ export function useCliches(m: Message, active: boolean): Hit[] {
   const content = activeSwipe(m).content;
   const on = active && m.role === 'assistant' && filterMode(chat) !== 'off';
   const disabled = chat?.filter?.disabled?.join(',');
-  return useMemo(() => (on ? clichesIn(content, chat) : []), [on, content, disabled, rulesKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ignored = activeSwipe(m).ignored;
+  return useMemo(() => (on ? clichesIn(content, chat).filter((h) => !ignored?.includes(hitKey(h))) : []), [on, content, disabled, rulesKey, ignored]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 export function useHighlight(body: RefObject<HTMLElement | null>, hits: Hit[], html: string) {

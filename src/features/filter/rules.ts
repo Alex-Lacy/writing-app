@@ -18,6 +18,9 @@ export interface Hit {
   text: string;
 }
 
+/** How an ignored hit is remembered: the rule and the phrase, so it stays ignored if the text moves. */
+export const hitKey = (h: Hit) => `${h.ruleId}:${h.text.toLowerCase()}`;
+
 export function parseLists(text: string, into = new Map<string, string>(), errors: string[] = []) {
   const raw = new Map<string, string>();
   for (const line of text.split('\n')) {

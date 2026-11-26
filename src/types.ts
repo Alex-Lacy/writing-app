@@ -271,6 +271,8 @@ export interface Swipe {
   error?: string;
   /** Token counts the server reported for the request that made this version. */
   usage?: { prompt?: number; completion?: number };
+  /** Cliché Filter hits you chose to leave as they are (rule id + phrase). */
+  ignored?: string[];
 }
 
 export interface Message {
