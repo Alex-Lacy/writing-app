@@ -37,28 +37,20 @@ export function wordDiff(a: string, b: string, maxCells = 4_000_000): Part[] | u
   return tidy(out);
 }
 
-/** A lone space kept between two changes reads as noise: fold it into the changes. */
+/** A word or two kept between two changes (often just "the" or a space) reads as noise:
+ * fold it into the changes, so each change reads as a whole phrase. Each run of changes is then
+ * shown as all removals, then all additions, so it reads "old → new". */
 function tidy(parts: Part[]): Part[] {
-  const out: Part[] = [];
-  for (let k = 0; k < parts.length; k++) {
-    const p = parts[k];
-    if (p.kind === 'same' && /^\s+$/.test(p.text) && k > 0 && k < parts.length - 1 && parts[k - 1].kind !== 'same' && parts[k + 1].kind !== 'same') {
-      const d = out.findLast((q) => q.kind === 'del'), ins = out.findLast((q) => q.kind === 'ins');
-      if (d) d.text += p.text; else out.push({ kind: 'del', text: p.text });
-      if (ins) ins.text += p.text; else out.push({ kind: 'ins', text: p.text });
-      continue;
-    }
-    out.push(p);
-  }
-  // Put each run of changes as all removals, then all additions, so it reads "old → new".
+  const small = (t: string) => t.length < 16 && t.trim().split(/\s+/).filter(Boolean).length <= 2;
   const res: Part[] = [];
   let del = '', ins = '';
   const flush = () => { if (del) res.push({ kind: 'del', text: del }); if (ins) res.push({ kind: 'ins', text: ins }); del = ins = ''; };
-  for (const p of out) {
+  parts.forEach((p, k) => {
     if (p.kind === 'del') del += p.text;
     else if (p.kind === 'ins') ins += p.text;
+    else if ((del || ins) && k < parts.length - 1 && small(p.text)) { del += p.text; ins += p.text; }
     else { flush(); res.push(p); }
-  }
+  });
   flush();
   return res;
 }
