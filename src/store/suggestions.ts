@@ -169,6 +169,12 @@ export async function reject(id: string) {
   if (x && x.status === 'pending') await save({ ...x, status: 'rejected' });
 }
 
+/** Brings a rejected suggestion back to be decided again. */
+export async function unreject(id: string) {
+  const x = get().suggestions.find((s) => s.id === id) ?? (await repo.get('suggestions', id));
+  if (x && x.status === 'rejected' && !x.failed) await save({ ...x, status: 'pending' });
+}
+
 /** Reverses an accepted suggestion. */
 export const undo = (id: string) => once(id, () => undoNow(id));
 

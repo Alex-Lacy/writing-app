@@ -3,6 +3,7 @@ import { pickableModels, jobModelName } from '../ai/jobs';
 import { applyRetcon, ignoreRetcon, retconScope, startRetcon, stopRetcon, undoRetcon, useRetcon } from '../features/retcon';
 import { currentChat, saveSettings, ui, useStore } from '../store/store';
 import { SuggestionCard } from './panel/SuggestionCard';
+import { unreject } from '../store/suggestions';
 import { useDraft } from './useDraft';
 
 const COUNTS = [5, 10, 20, 0];
@@ -28,6 +29,7 @@ export function RetconModal() {
   const cards = mine ? suggestions.filter((x) => x.group === mine).sort((a, b) => order(a) - order(b)) : [];
   const pending = cards.filter((x) => x.status === 'pending').length;
   const applied = cards.filter((x) => x.status === 'accepted').length;
+  const ignored = cards.filter((x) => x.status === 'rejected' && !x.failed);
   const close = () => ui.openRetcon(undefined);
   const where = (id?: string) => {
     const i = messages.findIndex((m) => m.id === id);
@@ -72,6 +74,7 @@ export function RetconModal() {
                 {pending > 0 && <button className="small primary" onClick={() => void applyRetcon(mine!)}>Apply all</button>}
                 {pending > 0 && <button className="small ghost" onClick={() => void ignoreRetcon(mine!)}>Ignore the rest</button>}
                 {applied > 0 && <button className="small ghost" onClick={() => void undoRetcon(mine!)}>Undo all</button>}
+                {ignored.length > 0 && <button className="small ghost" onClick={() => { for (const x of ignored) void unreject(x.id); }}>Bring back ignored</button>}
               </div>
               {cards.map((x) => (
                 <div key={x.id} className="retcon-edit">

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { keptShare, wordDiff } from '../../lib/diff';
-import { accept, reject, undo } from '../../store/suggestions';
+import { accept, reject, undo, unreject } from '../../store/suggestions';
 import { useStore } from '../../store/store';
 import type { Suggestion } from '../../types';
 
@@ -14,7 +14,7 @@ const SOURCE: Record<Suggestion['source'], string> = {
   retcon: 'Retcon',
 };
 
-function title(x: Suggestion, bookName: (id: string) => string): string {
+function title(x: Suggestion, bookName: (id: string) => string, entryName: (bookId: string, entryId: string) => string | undefined): string {
   const t = x.target;
   switch (t.kind) {
     case 'system': return 'System prompt';
@@ -23,8 +23,8 @@ function title(x: Suggestion, bookName: (id: string) => string): string {
     case 'steering': return 'Steering';
     case 'length': return `Length: ${t.value}`;
     case 'codex-add': return `New Codex entry: ${t.entry.name}`;
-    case 'codex-edit': return `Update Codex entry: ${t.entry.name}`;
-    case 'codex-remove': return `Remove Codex entry${bookName(t.bookId) ? ` from ${bookName(t.bookId)}` : ''}`;
+    case 'codex-edit': return `Update Codex entry: ${t.entry.name}${bookName(t.bookId) ? ` (${bookName(t.bookId)})` : ''}`;
+    case 'codex-remove': return `Remove Codex entry${entryName(t.bookId, t.entryId) ? `: ${entryName(t.bookId, t.entryId)}` : ''}${bookName(t.bookId) ? ` (${bookName(t.bookId)})` : ''}`;
     case 'summary': return t.replaces?.length ? (t.part.merged ? 'Merged summary' : 'Refreshed summary part') : 'Summary of older story';
     case 'passage': return x.source === 'proofread' ? 'Correction' : x.source === 'filter' ? 'Cliché fix' : x.source === 'retcon' ? 'Retcon edit' : 'Rewrite';
     case 'style-add': return `New Style module: ${t.module.name}`;
@@ -41,11 +41,12 @@ export function SuggestionCard({ x, hideSource }: { x: Suggestion; hideSource?: 
   const books = useStore((s) => s.codex);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(x.after);
-  // A story's own book reads as "this story's Codex"; shared books by their name.
+  // Entries go by their own name; a book is named only when it's a shared Library book.
   const bookName = (id: string) => {
     const b = books.find((x) => x.id === id);
-    return !b ? '' : b.chatId === x.chatId ? "this story's Codex" : b.name;
+    return !b || b.chatId ? '' : b.name;
   };
+  const entryName = (bookId: string, entryId: string) => books.find((b) => b.id === bookId)?.entries.find((e) => e.id === entryId)?.name;
   const t = x.target;
   const keys = t.kind === 'codex-add' || t.kind === 'codex-edit' ? t.entry.keys : undefined;
   const showsAfter = t.kind !== 'codex-remove' && t.kind !== 'style-toggle' && t.kind !== 'length' && t.kind !== 'outline-next';
@@ -58,7 +59,7 @@ export function SuggestionCard({ x, hideSource }: { x: Suggestion; hideSource?: 
   return (
     <div className={`sg-card sg-${x.status}`}>
       <div className="sg-head">
-        <b>{title(x, bookName)}</b>
+        <b>{title(x, bookName, entryName)}</b>
         {!hideSource && <span className="chip">{SOURCE[x.source]}</span>}
       </div>
       {x.reason && <p className="muted small">{x.reason}</p>}
@@ -85,7 +86,12 @@ export function SuggestionCard({ x, hideSource }: { x: Suggestion; hideSource?: 
             <button className="small ghost" onClick={() => undo(x.id)}>Undo</button>
           </>
         )}
-        {x.status === 'rejected' && <span className={x.failed ? 'msg-error small' : 'muted small'}>{x.failed ?? 'Rejected'}</span>}
+        {x.status === 'rejected' && (
+          <>
+            <span className={x.failed ? 'msg-error small' : 'muted small'}>{x.failed ?? 'Rejected'}</span>
+            {!x.failed && <button className="small ghost" onClick={() => void unreject(x.id)} title="Bring this suggestion back">Undo</button>}
+          </>
+        )}
       </div>
     </div>
   );

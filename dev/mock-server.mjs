@@ -59,6 +59,14 @@ http.createServer(async (req, res) => {
   lastBody = j;
   const last = j.messages.at(-1);
   const sys = String(j.messages[0]?.content ?? '');
+  // TINYCTX: a plan with a 9,000-token window, refusing anything bigger the way Featherless does.
+  if (JSON.stringify(j.messages).includes('TINYCTX')) {
+    const prompt = Math.round(JSON.stringify(j.messages).length / 4);
+    if (prompt + (j.max_tokens ?? 0) > 9000) {
+      res.writeHead(400, { ...cors, 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: { message: `Maximum context length for model '${j.model}' allowed on your plan is 9000 tokens. Your prompt has ${prompt} tokens plus max_tokens=${j.max_tokens} = ${prompt + j.max_tokens} total.` } }));
+    }
+  }
   // OVERTHINK: with thinking on, reasons on and on; with it off, answers at once.
   if (String(last.content).includes('OVERTHINK')) {
     res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream' });

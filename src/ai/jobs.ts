@@ -2,6 +2,8 @@
 // model runs each, and a queue so they never compete with the story reply. Featherless plans
 // cap how many requests can run at once, so jobs wait until the story reply has finished.
 import { applySplit } from '../providers/thinkSplitter';
+import { contextError, fitRequest, knownLimit, learnLimit } from './fit';
+import { estimateTokens } from '../context/tokens';
 import { streamChat, type ProviderError, type WireMessage } from '../providers/openai';
 
 const RETRY_WAITS = [5000, 10000, 20000, 30000];
@@ -188,6 +190,10 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
       let reasoning = '';
       const think = o.think ?? THINKS[o.job];
       let attempt = 0;
+      // Fit prompt + reply room into the model's window; a "context too long" answer teaches us
+      // the real limit (and how far off our token estimate was) for one more try.
+      let scale = 1;
+      let fitTries = 0;
       const extra = () => ({ ...jobThinkingExtra(o.job, m, think), ...o.extra });
       const thinkRoom = () => (m.thinking && (m.thinking === 'always' || think) ? 4096 : 0);
       let stalled = '';
@@ -206,7 +212,9 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
         try {
           o.onProgress?.({ phase: 'sent', reasoning: reasoning.length });
           watch(FIRST_BYTE_MS, `${m.provider.name} didn't start the reply within ${FIRST_BYTE_MS / 60_000} minutes (the model may be busy). Try again in a moment.`);
-          for await (const ev of streamChat(m.provider, m.modelId, o.messages, { maxTokens: (o.maxTokens ?? 2048) + thinkRoom(), temperature: o.temperature ?? 0.5 }, step.signal, extra(), !!thinkRoom())) {
+          const fit = fitRequest(o.messages, (o.maxTokens ?? 2048) + thinkRoom(), knownLimit(m.modelId, m.contextLength), scale);
+          if (fit.maxOut < 1024) throw new Error(`This is too long for ${m.modelId.split('/').pop()}'s ${knownLimit(m.modelId, m.contextLength)?.toLocaleString()}-token window on your plan, even without the earlier conversation. Pick a model with a bigger window, or shorten the story's setup or Codex.`);
+          for await (const ev of streamChat(m.provider, m.modelId, fit.messages, { maxTokens: fit.maxOut, temperature: o.temperature ?? 0.5 }, step.signal, extra(), !!thinkRoom())) {
             watch(SILENT_MS, `The reply stopped arriving for ${SILENT_MS / 60_000} minutes, so it was ended. Try again.`);
             if (ev.type === 'moved') {
               ({ content: text, reasoning } = applySplit({ content: text, reasoning }, { content: '', reasoning: '', moved: ev }));
@@ -225,6 +233,14 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
         } catch (e) {
           clearTimeout(timer);
           if (stalled) throw new Error(stalled);
+          const ce = !text && !abort.signal.aborted ? contextError((e as Error).message ?? '') : undefined;
+          if (ce && fitTries++ < 2) {
+            learnLimit(m.modelId, ce.limit);
+            const sent = fitRequest(o.messages, (o.maxTokens ?? 2048) + thinkRoom(), knownLimit(m.modelId, m.contextLength), scale).messages;
+            const est = sent.reduce((n, x) => n + estimateTokens(typeof x.content === 'string' ? x.content : JSON.stringify(x.content)) + 4, 0);
+            scale = ce.prompt && est ? Math.max(scale, ce.prompt / est) * 1.03 : scale * 1.15;
+            continue;
+          }
           // Busy (another request is using the plan's allowance) or a dropped connection: wait and retry.
           const busy = (e as ProviderError).status === 429 || e instanceof TypeError;
           if (!busy || text || attempt >= RETRY_WAITS.length || abort.signal.aborted) throw e;

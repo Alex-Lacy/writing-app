@@ -31,5 +31,6 @@ p.on('dialog', (d) => d.accept());
 await p.locator('.sg-top button:has-text("Reject all")').click();
 await p.waitForTimeout(300);
 console.log('pending after reject all:', await p.locator('.sg-top h3').innerText());
+await p.locator('details.section summary').click(); await p.locator('.sg-rejected button:has-text("Undo")').first().click(); await p.waitForTimeout(300); console.log('after undo reject:', await p.locator('.sg-top h3').innerText());
 console.log('errors:', errs);
 await b.close();
