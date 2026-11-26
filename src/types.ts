@@ -335,6 +335,8 @@ export interface AppSettings {
   jobModels?: JobModels;
   /** A model picked for one Helper (by Helper id), over the Helper job's model. */
   helperModels?: Record<string, string>;
+  /** Whether each Helper thinks first, on models where that's optional (by Helper id). */
+  helperThinking?: Record<string, 'on' | 'off'>;
   /** Defaults for new chats. */
   defaultUpdatesEvery?: number;
   defaultAutoSummary?: boolean;

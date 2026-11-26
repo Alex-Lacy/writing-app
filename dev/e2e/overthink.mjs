@@ -22,22 +22,24 @@ await p.waitForTimeout(800);
 // Make the mock model one that can think or not, then ask the Helper (default model: thinks first).
 await p.evaluate(async () => {
   const st = await import('/src/store/store.ts');
-  for (const m of st.useStore.getState().models) await st.saveModel?.({ ...m, thinking: 'optional' });
-  st.useStore.setState({ models: st.useStore.getState().models.map((m) => ({ ...m, thinking: 'optional' })) });
+  for (const m of st.useStore.getState().models) await st.upsertModel({ ...m, thinking: 'optional' });
   st.ui.openHelper('helper-codex');
 });
 const reqs = [];
+await p.waitForTimeout(500); console.log('model thinking:', await p.evaluate(async () => (await import('/src/store/store.ts')).useStore.getState().models.map((m) => m.thinking)));
 p.on('request', (r) => { if (r.url().includes('/chat/completions')) reqs.push(JSON.parse(r.postData() || '{}').chat_template_kwargs?.enable_thinking); });
-await p.locator('.helper-input textarea').fill('OVERTHINK this edit');
-await p.keyboard.press('Enter');
-await p.waitForFunction(() => [...document.querySelectorAll('.helper-msg.assistant')].some((e) => e.textContent.includes('Quick answer')), null, { timeout: 30000 });
-console.log('default model: thinking requests', reqs, '→ answered after the cap');
-// With a model picked for this Helper, no thinking at all.
-reqs.length = 0;
-await p.locator('.helper-model select').selectOption({ index: 1 });
-await p.locator('.helper-input textarea').fill('OVERTHINK again');
-await p.keyboard.press('Enter');
-await p.waitForFunction(() => [...document.querySelectorAll('.helper-msg.assistant')].filter((e) => e.textContent.includes('Quick answer')).length === 2, null, { timeout: 30000 });
-console.log('picked model: thinking requests', reqs);
+const ask = async (label) => {
+  reqs.length = 0;
+  await p.locator('.helper-input textarea').fill('OVERTHINK ' + label);
+  await p.keyboard.press('Enter');
+  await p.waitForTimeout(5500);
+  console.log(label, '| select:', await p.locator('.helper-think option:checked').innerText(), '| thinking sent:', reqs);
+};
+await ask('default model');
+await p.locator('.helper-think').selectOption('off');
+await ask('default model, thinking off');
+await p.locator('.helper-model select').first().selectOption({ index: 1 });
+await p.locator('.helper-think').selectOption('on');
+await ask('picked model, thinking on');
 console.log('errors:', errs);
 await b.close();

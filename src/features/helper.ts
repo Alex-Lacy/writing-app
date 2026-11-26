@@ -156,8 +156,7 @@ async function reply(chatId: string, helperId: string) {
       const res = await runJob({
         job: 'helper',
         modelKey: useStore.getState().settings.helperModels?.[helper.id],
-        // A model picked for one Helper is usually picked for speed: answer without thinking first.
-        think: useStore.getState().settings.helperModels?.[helper.id] ? false : undefined,
+        think: helperThinks(helper.id),
         chat,
         label: `${helper.name} is thinking`,
         maxTokens: 8000, // room for a whole long outline in one reply
@@ -223,4 +222,12 @@ async function reply(chatId: string, helperId: string) {
   const now = useStore.getState();
   const seen = now.panel === 'chat-settings' && now.panelTab === 'helper' && now.currentChatId === chatId && (now.helperId ?? helperId) === helperId;
   useStore.setState({ helperLive: undefined, helperDone: seen ? undefined : { chatId, helperId } });
+}
+
+/** Whether a Helper thinks first (on models where that's optional): your choice, else on with the
+ * Helper's default model and off with one you picked (usually picked for speed). */
+export function helperThinks(helperId: string): boolean {
+  const st = useStore.getState().settings;
+  const set = st.helperThinking?.[helperId];
+  return set ? set === 'on' : !st.helperModels?.[helperId];
 }

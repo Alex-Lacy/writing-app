@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { askHelper, clearThread, deleteHelperMessage, editHelperMessage, helpersList, retryHelper, stopHelper } from '../../features/helper';
+import { askHelper, clearThread, helperThinks, deleteHelperMessage, editHelperMessage, helpersList, retryHelper, stopHelper } from '../../features/helper';
 import { renderMarkdown } from '../../lib/markdown';
 import { currentChat, saved, saveSettings, ui, useStore } from '../../store/store';
-import { jobModelName, pickableModels } from '../../ai/jobs';
+import { jobModel, jobModelName, pickableModels } from '../../ai/jobs';
 import { SuggestionCard } from './SuggestionCard';
 import { useStickyScroll } from '../useStickyScroll';
 import { useDraft } from '../useDraft';
@@ -28,6 +28,10 @@ export function HelperTab({ popped = false }: { popped?: boolean }) {
   const models = useStore((s) => s.models);
   const defaultName = jobModelName('helper', chat);
   const choices = useMemo(() => pickableModels(chat), [chat, models]); // eslint-disable-line react-hooks/exhaustive-deps
+  const thinking = useStore((s) => s.settings.helperThinking?.[helper.id]);
+  const thinks = useMemo(() => helperThinks(helper.id), [helper.id, thinking, picked]); // eslint-disable-line react-hooks/exhaustive-deps
+  const canThink = jobModel('helper', chat, { key: picked })?.thinking;
+  const setThinking = (v: 'on' | 'off') => saveSettings({ helperThinking: { ...useStore.getState().settings.helperThinking, [helper.id]: v } });
   const pickModel = (key: string) => saveSettings({ helperModels: { ...useStore.getState().settings.helperModels, [helper.id]: key || undefined } as Record<string, string> });
   // Unsent text is kept per story and Helper, through tab switches and reloads.
   const [text, setText] = useDraft(chat ? `helper:${chat.id}:${helper.id}` : undefined);
@@ -96,6 +100,11 @@ export function HelperTab({ popped = false }: { popped?: boolean }) {
           <select value={picked && choices.some((c) => c.key === picked) ? picked : ''} onChange={(e) => void pickModel(e.target.value)} title="The model this Helper uses. Pick a faster one for quick edits; remembered for this Helper.">
             <option value="">{defaultName ? `Default (${defaultName})` : 'Default'}</option>
             {choices.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
+          </select>
+          <select className="helper-think" value={canThink === 'always' ? 'on' : canThink ? (thinks ? 'on' : 'off') : 'off'} disabled={canThink !== 'optional'} onChange={(e) => void setThinking(e.target.value as 'on' | 'off')}
+            title={canThink === 'optional' ? 'Thinking first gives better plans but takes longer. Remembered for this Helper.' : canThink === 'always' ? 'This model always thinks first.' : "This model doesn't think first."}>
+            <option value="on">Thinking on</option>
+            <option value="off">Thinking off</option>
           </select>
         </label>
       </div>

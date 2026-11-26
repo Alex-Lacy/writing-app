@@ -422,3 +422,4 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .retcon-opts { gap: 12px; flex-wrap: wrap; }
 .retcon-top { position: sticky; top: -12px; z-index: 2; background: var(--bg2); padding: 8px 0; }
 .retcon-edit { margin-bottom: 6px; }
+.helper-model .helper-think { flex: 0 0 auto; max-width: 140px; }

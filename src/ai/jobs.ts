@@ -148,8 +148,6 @@ export interface JobProgress {
 /** No reply starting within this long (the provider queues busy models), or a stream going silent, ends the job. */
 const FIRST_BYTE_MS = 6 * 60_000;
 const SILENT_MS = 2 * 60_000;
-/** About 3,000 words of thinking: past this, a model that can answer without thinking is asked to. */
-const THINK_CAP = 16_000;
 
 export interface JobResult {
   text: string;
@@ -188,10 +186,7 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
     {
       let text = '';
       let reasoning = '';
-      let think = o.think ?? THINKS[o.job];
-      // Thinking that runs long on a model that can skip it is cut off, and the job is asked again
-      // without thinking: a side job shouldn't sit "thinking" for minutes.
-      let overthought = false;
+      const think = o.think ?? THINKS[o.job];
       let attempt = 0;
       const extra = () => ({ ...jobThinkingExtra(o.job, m, think), ...o.extra });
       const thinkRoom = () => (m.thinking && (m.thinking === 'always' || think) ? 4096 : 0);
@@ -223,10 +218,6 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
             } else if (ev.type === 'reasoning') {
               reasoning += ev.text;
               o.onProgress?.({ phase: 'thinking', reasoning: reasoning.length });
-              if (m.thinking === 'optional' && think && !text && reasoning.length > THINK_CAP) {
-                overthought = true;
-                step.abort();
-              }
             }
           }
           clearTimeout(timer);
@@ -234,14 +225,6 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
         } catch (e) {
           clearTimeout(timer);
           if (stalled) throw new Error(stalled);
-          if (overthought && !abort.signal.aborted) {
-            overthought = false;
-            think = false;
-            text = '';
-            reasoning = '';
-            o.onText?.('');
-            continue;
-          }
           // Busy (another request is using the plan's allowance) or a dropped connection: wait and retry.
           const busy = (e as ProviderError).status === 429 || e instanceof TypeError;
           if (!busy || text || attempt >= RETRY_WAITS.length || abort.signal.aborted) throw e;
