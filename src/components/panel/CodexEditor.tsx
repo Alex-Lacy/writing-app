@@ -1,11 +1,18 @@
 import { useState } from 'react';
 import { estimateTokens } from '../../context/tokens';
+import { useDraft } from '../useDraft';
 import { newEntry, removeEntry, upsertEntry } from '../../store/codexStore';
 import type { CodexBook, CodexEntry } from '../../types';
 
-function EntryEditor({ bookId, e, onDone }: { bookId: string; e: CodexEntry; onDone: () => void }) {
-  const [d, setD] = useState(e);
-  const [keys, setKeys] = useState(e.keys.join(', '));
+function EntryEditor({ bookId, e, onDone: close }: { bookId: string; e: CodexEntry; onDone: () => void }) {
+  // Unsaved edits are kept as a draft, so switching tabs or reloading doesn't lose them.
+  const [draft, setDraft] = useDraft(`codex:${e.id}`);
+  const kept = draft ? (JSON.parse(draft) as { d: CodexEntry; keys: string }) : undefined;
+  const d = kept?.d ?? e;
+  const keys = kept?.keys ?? e.keys.join(', ');
+  const setD = (next: CodexEntry) => setDraft(JSON.stringify({ d: next, keys }));
+  const setKeys = (k: string) => setDraft(JSON.stringify({ d, keys: k }));
+  const onDone = () => { setDraft(''); close(); };
   const save = () => {
     void upsertEntry(bookId, { ...d, name: d.name.trim() || 'Untitled', keys: keys.split(',').map((k) => k.trim()).filter(Boolean) });
     onDone();
@@ -35,7 +42,11 @@ function EntryEditor({ bookId, e, onDone }: { bookId: string; e: CodexEntry; onD
 
 /** List and edit the entries of one Codex book. */
 export function CodexEditor({ book, onAdd }: { book?: CodexBook; onAdd?: () => Promise<CodexBook> }) {
-  const [open, setOpen] = useState<string>();
+  // The entry being edited stays open across tab switches and reloads.
+  const [openId, setOpenId] = useDraft(book ? `codexOpen:${book.id}` : undefined);
+  const [added, setAdded] = useState<string>(); // an entry just added to a book that was only now created
+  const open = openId || added;
+  const setOpen = (id?: string) => { setAdded(undefined); setOpenId(id ?? ''); };
   const [q, setQ] = useState('');
   const entries = book?.entries ?? [];
   const shown = q ? entries.filter((e) => `${e.name} ${e.keys.join(' ')} ${e.text}`.toLowerCase().includes(q.toLowerCase())) : entries;
@@ -43,8 +54,10 @@ export function CodexEditor({ book, onAdd }: { book?: CodexBook; onAdd?: () => P
     const b = book ?? (await onAdd?.());
     if (!b) return;
     const e = newEntry();
+    // A new book has no open-entry memory yet: write it under the new book's key.
+    if (b.id !== book?.id) { localStorage.setItem(`draft:codexOpen:${b.id}`, e.id); setAdded(e.id); }
+    else setOpen(e.id);
     await upsertEntry(b.id, e);
-    setOpen(e.id);
   };
   return (
     <div className="cx-book">

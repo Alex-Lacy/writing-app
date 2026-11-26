@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { checkForUpdates } from '../../features/updates';
 import { currentChat, DEFAULT_UPDATES_EVERY, updateChat, useStore } from '../../store/store';
-import { acceptAll } from '../../store/suggestions';
+import { acceptAll, reject } from '../../store/suggestions';
 import { SuggestionCard } from './SuggestionCard';
 
 const UPDATE_OPTIONS: [number, string][] = [
@@ -36,6 +36,7 @@ export function SuggestionsTab() {
     }
   };
 
+  const rejectAll = async (ids: string[]) => { for (const id of ids) await reject(id); };
   return (
     <div className="panel-body">
       <section>
@@ -54,9 +55,10 @@ export function SuggestionsTab() {
       </section>
 
       <section>
-        <div className="row">
+        <div className="row sg-top">
           <h3 className="grow">Waiting for you ({pending.length})</h3>
           {pending.length > 1 && <button className="small ghost" onClick={() => acceptAll(chat.id)}>Accept all</button>}
+          {pending.length > 1 && <button className="small ghost" onClick={() => { if (confirm(`Reject all ${pending.length} suggestions?`)) void rejectAll(pending.map((x) => x.id)); }}>Reject all</button>}
         </div>
         {pending.length === 0 && <p className="muted small">Nothing to review.</p>}
         {pending.map((x) => <SuggestionCard key={x.id} x={x} />)}

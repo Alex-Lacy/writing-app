@@ -414,3 +414,5 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .helper-model { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
 .helper-model select { flex: 1; min-width: 0; max-width: 320px; }
 .job-stop { font-size: 10px; padding: 2px 6px; margin-left: -4px; }
+/* Suggestions: the count and Accept all / Reject all stay at the top of a long list */
+.sg-top { position: sticky; top: -12px; z-index: 2; background: var(--bg2); padding: 8px 0 6px; }

@@ -1,0 +1,35 @@
+import { chromium } from 'playwright-core';
+const b = await chromium.launch({ executablePath: process.env.CHROME });
+const p = await b.newPage({ viewport: { width: 1280, height: 900 } });
+const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+await p.goto('http://127.0.0.1:5173');
+await p.waitForSelector('.modal');
+await p.locator('.modal-head .icon').first().click();
+await p.getByRole('button', { name: '+ New story' }).dispatchEvent('click');
+await p.waitForTimeout(500);
+await p.locator('.panel-tabs button:has-text("Codex")').click();
+await p.locator('button:has-text("+ Add entry")').first().click();
+await p.waitForTimeout(500); await p.screenshot({ path: '/tmp/sw.png' }); console.log(await p.evaluate(() => Object.keys(localStorage).filter((k) => k.includes('codex')).map((k) => k + '=' + localStorage.getItem(k))));console.log('add buttons', await p.locator('button:has-text("+ Add entry")').count(), 'editors', await p.locator('.cx-entry-edit').count(), 'entries', await p.locator('.cx-entry').count());
+await p.locator('.cx-entry-edit input').first().fill('Rell');
+await p.locator('.cx-entry-edit textarea').fill('A smuggler, half-written');
+await p.locator('.panel-tabs button:has-text("Setup")').click();
+await p.locator('.panel-tabs button:has-text("Codex")').click();
+console.log('codex after tab switch:', await p.locator('.cx-entry-edit input').first().inputValue(), '|', await p.locator('.cx-entry-edit textarea').inputValue());
+await p.reload(); await p.waitForTimeout(1000);
+await p.locator('.modal-scrim:not(.helper-scrim) .modal-head .icon').first().click({ timeout: 1500 }).catch(() => {});
+console.log('codex after reload:', await p.locator('.cx-entry-edit textarea').inputValue().catch(() => 'none'));
+await p.locator('.cx-entry-edit button:has-text("Save")').click();
+console.log('saved, editor closed:', await p.locator('.cx-entry-edit').count() === 0, '| entry:', await p.locator('.cx-entry').first().innerText());
+// Suggestions: Reject all
+await p.evaluate(async () => {
+  const st = await import('/src/store/store.ts'); const sg = await import('/src/store/suggestions.ts');
+  const id = st.useStore.getState().currentChatId;
+  await sg.addSuggestions(id, [1, 2, 3].map((n) => ({ source: 'helper', target: { kind: 'steering' }, before: 'a', after: 'b' + n })));
+  st.ui.openPanel('suggestions');
+});
+p.on('dialog', (d) => d.accept());
+await p.locator('.sg-top button:has-text("Reject all")').click();
+await p.waitForTimeout(300);
+console.log('pending after reject all:', await p.locator('.sg-top h3').innerText());
+console.log('errors:', errs);
+await b.close();

@@ -110,7 +110,8 @@ export function RewriteBox({ m }: { m: Message }) {
         autoFocus rows={3} value={feedback} onChange={(e) => setFeedback(e.target.value)}
         placeholder={part ? 'What should change? e.g. “less flowery”, “make her angrier”' : 'What should change? e.g. “slower, more dialogue”. Becomes a new version.'}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
+          // On touch screens Return is a new line; Rewrite is the button.
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !matchMedia('(pointer: coarse)').matches) {
             e.preventDefault();
             void run('rewrite');
           }
