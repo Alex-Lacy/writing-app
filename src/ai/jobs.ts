@@ -151,19 +151,36 @@ export interface JobResult {
   reasoning: string;
 }
 
+const stoppers = new Map<string, AbortController>();
+/** Stops a running side job (from the status line). What it wrote so far is dropped by its caller. */
+export function stopJob(id: string) {
+  stoppers.get(id)?.abort();
+}
+
 /** Runs one job after the story reply and any earlier jobs have finished. */
 export function runJob(o: RunJobOptions): Promise<JobResult> {
+  // Listed (and stoppable) from the moment it's asked for, while it waits its turn too.
+  const id = Math.random().toString(36).slice(2);
+  const abort = new AbortController();
+  o.signal?.addEventListener('abort', () => abort.abort());
+  stoppers.set(id, abort);
+  useStore.setState({ jobs: [...useStore.getState().jobs, { id, label: o.label }] });
   const run = async (): Promise<JobResult> => {
-    await waitForStoryReply();
-    if (o.signal?.aborted) throw new DOMException('Stopped before it started', 'AbortError');
-    const m = jobModel(o.job, o.chat, { key: o.modelKey });
-    if (!m) throw new Error('Pick a model first (Settings, then Models).');
-    const id = Math.random().toString(36).slice(2);
-    const abort = new AbortController();
-    o.signal?.addEventListener('abort', () => abort.abort());
-    running = { job: o.job, abort };
-    useStore.setState({ jobs: [...useStore.getState().jobs, { id, label: o.label }] });
     try {
+      await waitForStoryReply();
+      if (abort.signal.aborted) throw new DOMException('Stopped before it started', 'AbortError');
+      const m = jobModel(o.job, o.chat, { key: o.modelKey });
+      if (!m) throw new Error('Pick a model first (Settings, then Models).');
+      running = { job: o.job, abort };
+      return await stream(m);
+    } finally {
+      running = undefined;
+      stoppers.delete(id);
+      useStore.setState({ jobs: useStore.getState().jobs.filter((j) => j.id !== id) });
+    }
+  };
+  const stream = async (m: JobModel): Promise<JobResult> => {
+    {
       let text = '';
       let reasoning = '';
       const extra = { ...jobThinkingExtra(o.job, m), ...o.extra };
@@ -210,9 +227,6 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
           running = { job: o.job, abort };
         }
       }
-    } finally {
-      running = undefined;
-      useStore.setState({ jobs: useStore.getState().jobs.filter((j) => j.id !== id) });
     }
   };
   const p = chain.then(run, run);

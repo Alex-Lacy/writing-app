@@ -413,3 +413,4 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .sg-diff del + ins { margin-left: 3px; }
 .helper-model { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
 .helper-model select { flex: 1; min-width: 0; max-width: 320px; }
+.job-stop { font-size: 10px; padding: 2px 6px; margin-left: -4px; }

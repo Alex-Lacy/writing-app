@@ -1,5 +1,6 @@
 import { useDeferredValue, useMemo } from 'react';
 import { selectChat, replyReserve, saveSettings, previewFor, contextLimitFor, currentChat, modelLabel, ui, updateChat, useStore } from '../store/store';
+import { stopJob } from '../ai/jobs';
 
 /** Opens a Helper's conversation, switching story first if it belongs to another. */
 async function openHelperAt(at: { chatId: string; helperId: string }) {
@@ -63,6 +64,7 @@ export function TopBar() {
         </button>
       )}
       {jobs.length > 0 && <span className={`jobs muted small${helperLive ? ' link' : ''}`} title={jobs.map((j) => j.label).join(', ')} onClick={helperLive ? () => openHelperAt(helperLive) : undefined}>⟳ {jobs[0].label}…</span>}
+      {jobs.length > 0 && <button className="icon small job-stop" onClick={() => stopJob(jobs[0].id)} title={`Stop: ${jobs[0].label}`} aria-label="Stop this job">■</button>}
       {helperLive && !jobs.length && <button className="jobs small ghost" onClick={() => openHelperAt(helperLive)}>{helperLive.error ? '⚠ Helper failed' : '⟳ Helper is waiting…'}</button>}
       {helperDone && !helperLive && <button className="jobs small ghost done" onClick={() => openHelperAt(helperDone)} title="Open the Helper's reply">● Helper replied</button>}
       <button className="icon" onClick={() => ui.setFocus(true)} title="Full-screen reading: hide everything but the story (Esc to leave)">⤢</button>

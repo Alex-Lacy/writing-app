@@ -61,7 +61,7 @@ export async function storyAround(chat: Chat, messageId: string, from: number, t
 type NewSuggestion = Omit<Suggestion, 'id' | 'chatId' | 'status' | 'createdAt'>;
 
 /** Rewrites a passage (a highlighted part, or a whole message) and offers it as a card. */
-export async function rewritePassage(o: { chatId: string; messageId: string; from: number; to: number; feedback: string; source?: 'rewrite' | 'filter'; reason?: string }) {
+export async function rewritePassage(o: { chatId: string; messageId: string; from: number; to: number; feedback: string; source?: 'rewrite' | 'filter'; reason?: string; signal?: AbortSignal }) {
   const chat = useStore.getState().chats.find((c) => c.id === o.chatId);
   if (!chat) return;
   const a = await storyAround(chat, o.messageId, o.from, o.to);
@@ -69,6 +69,7 @@ export async function rewritePassage(o: { chatId: string; messageId: string; fro
     job: o.source === 'filter' ? 'filter' : 'rewrite',
     chat,
     label: o.source === 'filter' ? 'Rewriting a cliché' : 'Rewriting',
+    signal: o.signal,
     maxTokens: Math.max(400, Math.round(countWords(a.passage) * 2.5)),
     temperature: 0.7,
     messages: [
@@ -126,8 +127,9 @@ export async function rewriteMessage(chatId: string, messageId: string, feedback
     });
     await write((m) => setText(m, res.text), true);
   } catch (e) {
-    // Leave the original showing if the rewrite failed.
+    // Leave the original showing if the rewrite failed or was stopped.
     await write((m) => ({ ...m, swipes: m.swipes.filter((_, i) => i !== slot), activeSwipe: Math.min(m0.activeSwipe, m.swipes.length - 2) }), true);
+    if ((e as Error).name === 'AbortError') return;
     useStore.setState({ error: (e as Error).message });
     throw e;
   }

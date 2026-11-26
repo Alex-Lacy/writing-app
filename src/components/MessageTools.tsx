@@ -22,7 +22,7 @@ export function ClicheChip({ m, hits }: { m: Message; hits: Hit[] }) {
     try {
       await fixCliches(chatId, m.id, which, true);
     } catch (e) {
-      useStore.setState({ error: (e as Error).message });
+      if ((e as Error).name !== 'AbortError') useStore.setState({ error: (e as Error).message });
     } finally {
       setBusy(false);
     }
@@ -61,6 +61,7 @@ export function RewriteBox({ m }: { m: Message }) {
   const chatId = useStore((s) => s.currentChatId);
   const [feedback, setFeedback] = useState('');
   const [busy, setBusy] = useState<'' | 'rewrite' | 'proofread'>('');
+  const stopper = useRef<AbortController | undefined>(undefined);
   const [note, setNote] = useState('');
   const open = !!target && target.messageId === m.id;
   // Bring the box into view (on phones it can open below the fold). Braces: no return value.
@@ -80,13 +81,14 @@ export function RewriteBox({ m }: { m: Message }) {
   const run = async (what: 'rewrite' | 'proofread') => {
     setBusy(what);
     setNote('');
+    const stop = (stopper.current = new AbortController());
     try {
       if (what === 'proofread') {
-        const n = await proofread(chatId, m.id, part);
+        const n = await proofread(chatId, m.id, part, { signal: stop.signal });
         if (!n) setNote('No problems found.');
         else ui.openRewrite(undefined);
       } else if (part) {
-        const card = await rewritePassage({ chatId, messageId: m.id, ...part, feedback: feedback.trim() || 'Improve this passage.' });
+        const card = await rewritePassage({ chatId, messageId: m.id, ...part, feedback: feedback.trim() || 'Improve this passage.', signal: stop.signal });
         if (card) ui.openRewrite(undefined);
         else setNote('The model gave back the same text. Try a more specific instruction.');
       } else {
@@ -94,8 +96,9 @@ export function RewriteBox({ m }: { m: Message }) {
         await rewriteMessage(chatId, m.id, feedback.trim() || 'Improve this.');
       }
     } catch (e) {
-      setNote((e as Error).message);
+      setNote((e as Error).name === 'AbortError' ? 'Stopped. Nothing was changed.' : (e as Error).message);
     } finally {
+      stopper.current = undefined;
       setBusy('');
     }
   };
@@ -119,7 +122,9 @@ export function RewriteBox({ m }: { m: Message }) {
         <button className="small ghost" disabled={!!busy} onClick={() => run('proofread')} title={m.role === 'user' ? 'Consistency, facts, spelling and grammar' : 'Consistency and facts against your notes and the story'}>
           {busy === 'proofread' ? 'Checking…' : 'Proofread'}
         </button>
-        <button className="small ghost" onClick={() => ui.openRewrite(undefined)}>Cancel</button>
+        {busy
+          ? <button className="small ghost" onClick={() => stopper.current?.abort()}>Stop</button>
+          : <button className="small ghost" onClick={() => ui.openRewrite(undefined)}>Cancel</button>}
         {note && <span className="muted small">{note}</span>}
       </div>
     </div>

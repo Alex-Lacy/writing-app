@@ -1,0 +1,46 @@
+import { chromium } from 'playwright-core';
+const b = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const p = await b.newPage({ viewport: { width: 1280, height: 860 } });
+const errs = [];
+p.on('pageerror', (e) => errs.push(e.message));
+p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
+await p.goto('http://127.0.0.1:5173');
+await p.waitForSelector('.modal');
+const card = p.locator('.card').first();
+await card.locator('.provider-more summary').click();
+await card.getByLabel('Address (base URL)').fill('http://localhost:8787/v1');
+await card.getByLabel('Name', { exact: true }).fill('Mock');
+await card.locator('input[type=password]').fill('test-key');
+await card.getByText('Test connection').click();
+await p.waitForSelector('text=Connected, 2 models');
+await card.getByText('Pick models').click();
+await p.getByText('Fetch model list').click();
+await p.locator('.remote-row button').nth(0).click();
+await p.locator('.modal-head .icon').click();
+await p.locator('.composer textarea').fill('Mara at the docks SLOP');
+await p.keyboard.press('Enter');
+await p.waitForSelector('.msg-assistant .cliche-chip');
+const body = () => p.locator('.msg-assistant .msg-body').innerText();
+const original = await body();
+// Whole-message rewrite, stopped from the status line.
+await p.locator('.msg-assistant').hover();
+await p.locator('.msg-assistant .msg-actions button:has-text("Rewrite")').click();
+await p.locator('.rewrite-box textarea').fill('SLOWREWRITE please');
+await p.keyboard.press('Enter');
+await p.waitForFunction(() => document.querySelector('.msg-assistant .msg-body')?.textContent.includes('slow 3'));
+await p.locator('.job-stop').click();
+await p.waitForTimeout(500);
+console.log('message rewrite stopped: back to original', (await body()) === original, '| status line gone', await p.locator('.job-stop').count() === 0, '| versions', await p.locator('.msg-assistant .swipes').count());
+// Passage rewrite, stopped from the box.
+await p.evaluate(() => {
+  const el = document.querySelector('.msg-assistant .msg-body p');
+  const r = document.createRange(); r.selectNodeContents(el.firstChild); getSelection().removeAllRanges(); getSelection().addRange(r);
+});
+await p.locator('.sel-bar button').click();
+await p.locator('.rewrite-box textarea').fill('SLOWREWRITE');
+await p.locator('.rewrite-box button:has-text("Rewrite")').click();
+await p.locator('.rewrite-box button:has-text("Stop")').click();
+await p.waitForTimeout(400);
+console.log('passage stop note:', await p.locator('.rewrite-box .muted').last().innerText(), '| cards', await p.locator('.msg-cards .sg-card').count(), '| unchanged', (await body()) === original);
+console.log('errors:', errs, '| app error:', await p.locator('.error-bar, .app-error').count());
+await b.close();
