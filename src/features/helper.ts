@@ -156,6 +156,8 @@ async function reply(chatId: string, helperId: string) {
       const res = await runJob({
         job: 'helper',
         modelKey: useStore.getState().settings.helperModels?.[helper.id],
+        // A model picked for one Helper is usually picked for speed: answer without thinking first.
+        think: useStore.getState().settings.helperModels?.[helper.id] ? false : undefined,
         chat,
         label: `${helper.name} is thinking`,
         maxTokens: 8000, // room for a whole long outline in one reply

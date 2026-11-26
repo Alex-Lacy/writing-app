@@ -59,6 +59,18 @@ http.createServer(async (req, res) => {
   lastBody = j;
   const last = j.messages.at(-1);
   const sys = String(j.messages[0]?.content ?? '');
+  // OVERTHINK: with thinking on, reasons on and on; with it off, answers at once.
+  if (String(last.content).includes('OVERTHINK')) {
+    res.writeHead(200, { ...cors, 'Content-Type': 'text/event-stream' });
+    if (j.chat_template_kwargs?.enable_thinking) {
+      for (let i = 0; i < 400 && !res.destroyed; i++) {
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: 'Hmm, let me reconsider that once more. '.repeat(3) } }] })}\n\n`);
+        await new Promise((r) => setTimeout(r, 10));
+      }
+    } else res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: 'Quick answer without thinking.' } }] })}\n\n`);
+    res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`);
+    return res.end('data: [DONE]\n\n');
+  }
   // SLOWHELP in the last message streams slowly, to test closing the panel mid-reply.
   const slow = String(last.content).includes('SLOWHELP');
   const reply = async (text) => {

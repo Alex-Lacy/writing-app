@@ -1,0 +1,43 @@
+import { chromium } from 'playwright-core';
+const b = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const p = await b.newPage({ viewport: { width: 1280, height: 860 } });
+const errs = [];
+p.on('pageerror', (e) => errs.push(e.message));
+p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
+await p.goto('http://127.0.0.1:5173');
+await p.waitForSelector('.modal');
+const card = p.locator('.card').first();
+await card.locator('.provider-more summary').click();
+await card.getByLabel('Address (base URL)').fill('http://localhost:8787/v1');
+await card.getByLabel('Name', { exact: true }).fill('Mock');
+await card.locator('input[type=password]').fill('test-key');
+await card.getByText('Test connection').click();
+await p.waitForSelector('text=Connected, 2 models');
+await card.getByText('Pick models').click();
+await p.getByText('Fetch model list').click();
+await p.locator('.remote-row button').nth(0).click();
+await p.locator('.modal-head .icon').click();
+await p.getByRole('button', { name: '+ New story' }).dispatchEvent('click');
+await p.waitForTimeout(800);
+// Make the mock model one that can think or not, then ask the Helper (default model: thinks first).
+await p.evaluate(async () => {
+  const st = await import('/src/store/store.ts');
+  for (const m of st.useStore.getState().models) await st.saveModel?.({ ...m, thinking: 'optional' });
+  st.useStore.setState({ models: st.useStore.getState().models.map((m) => ({ ...m, thinking: 'optional' })) });
+  st.ui.openHelper('helper-codex');
+});
+const reqs = [];
+p.on('request', (r) => { if (r.url().includes('/chat/completions')) reqs.push(JSON.parse(r.postData() || '{}').chat_template_kwargs?.enable_thinking); });
+await p.locator('.helper-input textarea').fill('OVERTHINK this edit');
+await p.keyboard.press('Enter');
+await p.waitForFunction(() => [...document.querySelectorAll('.helper-msg.assistant')].some((e) => e.textContent.includes('Quick answer')), null, { timeout: 30000 });
+console.log('default model: thinking requests', reqs, '→ answered after the cap');
+// With a model picked for this Helper, no thinking at all.
+reqs.length = 0;
+await p.locator('.helper-model select').selectOption({ index: 1 });
+await p.locator('.helper-input textarea').fill('OVERTHINK again');
+await p.keyboard.press('Enter');
+await p.waitForFunction(() => [...document.querySelectorAll('.helper-msg.assistant')].filter((e) => e.textContent.includes('Quick answer')).length === 2, null, { timeout: 30000 });
+console.log('picked model: thinking requests', reqs);
+console.log('errors:', errs);
+await b.close();

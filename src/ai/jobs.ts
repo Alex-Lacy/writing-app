@@ -81,10 +81,10 @@ function withCaps(p: ProviderConfig, modelId: string, models?: ModelEntry[]): Jo
   return { provider: p, modelId, thinking: mine?.thinking ?? rec?.thinking, tools: mine?.tools ?? rec?.tools, contextLength: mine?.contextLength ?? rec?.contextLength };
 }
 
-export function jobThinkingExtra(job: Job, m: JobModel): Record<string, unknown> {
+export function jobThinkingExtra(job: Job, m: JobModel, think = THINKS[job]): Record<string, unknown> {
   if (!m.thinking) return {};
   if (m.thinking === 'optional')
-    return THINKS[job] ? { chat_template_kwargs: { enable_thinking: true, thinking: true }, reasoning_effort: 'low' } : { chat_template_kwargs: { enable_thinking: false, thinking: false } };
+    return think ? { chat_template_kwargs: { enable_thinking: true, thinking: true }, reasoning_effort: 'low' } : { chat_template_kwargs: { enable_thinking: false, thinking: false } };
   return { reasoning_effort: 'low' };
 }
 
@@ -123,6 +123,8 @@ export interface RunJobOptions {
   job: Job;
   /** A specific model for this run (a "Your models" key or "rec:<id>"), over the job's own. */
   modelKey?: string;
+  /** Whether a model that can think first should (default: per job). */
+  think?: boolean;
   chat?: Chat;
   messages: WireMessage[];
   /** Shown in the status line while it runs. */
@@ -146,6 +148,8 @@ export interface JobProgress {
 /** No reply starting within this long (the provider queues busy models), or a stream going silent, ends the job. */
 const FIRST_BYTE_MS = 6 * 60_000;
 const SILENT_MS = 2 * 60_000;
+/** About 3,000 words of thinking: past this, a model that can answer without thinking is asked to. */
+const THINK_CAP = 16_000;
 
 export interface JobResult {
   text: string;
@@ -184,8 +188,13 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
     {
       let text = '';
       let reasoning = '';
-      const extra = { ...jobThinkingExtra(o.job, m), ...o.extra };
-      const thinkRoom = m.thinking && (m.thinking === 'always' || THINKS[o.job]) ? 4096 : 0;
+      let think = o.think ?? THINKS[o.job];
+      // Thinking that runs long on a model that can skip it is cut off, and the job is asked again
+      // without thinking: a side job shouldn't sit "thinking" for minutes.
+      let overthought = false;
+      let attempt = 0;
+      const extra = () => ({ ...jobThinkingExtra(o.job, m, think), ...o.extra });
+      const thinkRoom = () => (m.thinking && (m.thinking === 'always' || think) ? 4096 : 0);
       let stalled = '';
       let timer: ReturnType<typeof setTimeout> | undefined;
       const watch = (ms: number, why: string) => {
@@ -195,11 +204,14 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
           abort.abort();
         }, ms);
       };
-      for (let attempt = 0; ; attempt++) {
+      for (;;) {
+        const step = new AbortController();
+        const cut = () => step.abort();
+        abort.signal.addEventListener('abort', cut);
         try {
           o.onProgress?.({ phase: 'sent', reasoning: reasoning.length });
           watch(FIRST_BYTE_MS, `${m.provider.name} didn't start the reply within ${FIRST_BYTE_MS / 60_000} minutes (the model may be busy). Try again in a moment.`);
-          for await (const ev of streamChat(m.provider, m.modelId, o.messages, { maxTokens: (o.maxTokens ?? 2048) + thinkRoom, temperature: o.temperature ?? 0.5 }, abort.signal, extra, !!thinkRoom)) {
+          for await (const ev of streamChat(m.provider, m.modelId, o.messages, { maxTokens: (o.maxTokens ?? 2048) + thinkRoom(), temperature: o.temperature ?? 0.5 }, step.signal, extra(), !!thinkRoom())) {
             watch(SILENT_MS, `The reply stopped arriving for ${SILENT_MS / 60_000} minutes, so it was ended. Try again.`);
             if (ev.type === 'moved') {
               ({ content: text, reasoning } = applySplit({ content: text, reasoning }, { content: '', reasoning: '', moved: ev }));
@@ -211,6 +223,10 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
             } else if (ev.type === 'reasoning') {
               reasoning += ev.text;
               o.onProgress?.({ phase: 'thinking', reasoning: reasoning.length });
+              if (m.thinking === 'optional' && think && !text && reasoning.length > THINK_CAP) {
+                overthought = true;
+                step.abort();
+              }
             }
           }
           clearTimeout(timer);
@@ -218,14 +234,24 @@ export function runJob(o: RunJobOptions): Promise<JobResult> {
         } catch (e) {
           clearTimeout(timer);
           if (stalled) throw new Error(stalled);
+          if (overthought && !abort.signal.aborted) {
+            overthought = false;
+            think = false;
+            text = '';
+            reasoning = '';
+            o.onText?.('');
+            continue;
+          }
           // Busy (another request is using the plan's allowance) or a dropped connection: wait and retry.
           const busy = (e as ProviderError).status === 429 || e instanceof TypeError;
           if (!busy || text || attempt >= RETRY_WAITS.length || abort.signal.aborted) throw e;
           running = undefined;
           o.onProgress?.({ phase: 'busy', reasoning: reasoning.length });
-          await new Promise((r) => setTimeout(r, RETRY_WAITS[attempt]));
+          await new Promise((r) => setTimeout(r, RETRY_WAITS[attempt++]));
           await waitForStoryReply();
           running = { job: o.job, abort };
+        } finally {
+          abort.signal.removeEventListener('abort', cut);
         }
       }
     }
