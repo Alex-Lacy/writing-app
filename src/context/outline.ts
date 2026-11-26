@@ -1,8 +1,8 @@
 // Outline: long-term steering. The story's plan is a list of beats, one per line, with the
 // current beat marked by a leading ">"; lines starting with "#" are chapter headings, not beats. Only the current beat steers the reply (close to it,
-// like Steering); the next couple of beats go near the top as background awareness only (not to
-// foreshadow: that turns heavy-handed), so the story doesn't contradict them; finished beats are
-// left to the summary.
+// like Steering); the chapter plan and the next couple of beats go near the top, worded neutrally
+// as where the story is heading: no push to set them up and no ban on hinting at them, so the model
+// can steer and foreshadow as naturally as a writer would. Finished beats are left to the summary.
 import type { ContextBlock } from './build';
 import type { Chat } from '../types';
 
@@ -169,7 +169,7 @@ export function outlineBlocks(chat: Chat): ContextBlock[] {
     out.push({
       id: 'outline-chapters',
       label: 'Outline: chapters',
-      text: `[The story's plan by chapter, for orientation only. Stay on the current scene; don't skip ahead, rush, or foreshadow later chapters.\n${chs.map((c, i) => `- ${c.title}${i < here ? ' (done)' : i === here ? ' (current chapter)' : ''}`).join('\n')}]`,
+      text: `[Where the story is heading, by chapter:\n${chs.map((c, i) => `- ${c.title}${i < here ? ' (done)' : i === here ? ' (current chapter)' : ''}`).join('\n')}]`,
       placement: { kind: 'top', order: 11 },
       source: 'outline',
     });
@@ -178,7 +178,7 @@ export function outlineBlocks(chat: Chat): ContextBlock[] {
     out.push({
       id: 'outline-ahead',
       label: 'Outline: coming later',
-      text: `[For your awareness only, the outline continues later with: ${ahead.join(' Then: ')} Don't steer toward these, set them up, foreshadow or mention them now; just don't write anything that contradicts them.]`,
+      text: `[Coming up next in the outline: ${ahead.join(' Then: ')}]`,
       placement: { kind: 'top', order: 12 },
       source: 'outline',
     });

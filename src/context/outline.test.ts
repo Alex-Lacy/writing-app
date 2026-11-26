@@ -25,7 +25,7 @@ describe('outline', () => {
     expect(b.map((x) => x.id)).toEqual(['outline-ahead', 'outline-now']);
     expect(b[1].text).toContain('Rell offers a job.');
     expect(b[0].text).toContain('The job goes wrong. Then: The betrayal.');
-    expect(b[0].text).toMatch(/Don't steer toward these/);
+    expect(b[0].text).not.toMatch(/foreshadow|Don't steer/);
     expect(b.map((x) => x.text).join()).not.toContain('Mara arrives');
     expect(outlineBlocks(chat({ text, ahead: 0 })).map((x) => x.id)).toEqual(['outline-now']);
     expect(outlineBlocks(chat({ text, off: true }))).toEqual([]);
