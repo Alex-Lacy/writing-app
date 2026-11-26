@@ -27,7 +27,7 @@ export const LENGTH_BUCKETS: Record<LengthBucket, BucketDef> = {
   scene: {
     label: 'One scene',
     instruction:
-      'Write ONE scene only (about 600 to 1,200 words) and stop when it ends. Do not start a second scene, add a scene break (***), jump ahead in time, or summarise what happens next.',
+      'Write ONE scene only (about 600 to 1,200 words) and stop when it ends. Do not start a second scene, add a scene break (***), or summarise what happens next. The scene may open after a gap in time or in a new place when the story or the current scene goal calls for it; once it starts, stay in it.',
     softStop: 1400, hardStop: 1800, breaks: 'scene',
   },
   chapter: {
