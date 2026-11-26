@@ -430,3 +430,12 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .helper-ctx td { padding: 1px 6px 1px 0; }
 .helper-ctx td:nth-child(2) { text-align: right; white-space: nowrap; }
 .helper-ctx tr.cut td:first-child { color: var(--fg); font-weight: 600; }
+/* Setup: Background and Steering fold away */
+.fold-head { display: flex; align-items: center; gap: 6px; }
+.fold-head:not(.open) + .fold-preview + .fold-body { display: none; }
+.fold-preview { display: block; width: 100%; text-align: left; border: none; background: none; padding: 2px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.fold-btn { padding: 0 6px; }
+.src-tags .tag { cursor: grab; touch-action: none; user-select: none; }
+.src-tags .tag.dragging { opacity: .5; }
+.src-tags .tag.drop { outline: 2px solid var(--c-tags); }
+.tag-edit { width: auto; min-width: 4ch; padding: 1px 8px; border-radius: 999px; font-size: 13px; }

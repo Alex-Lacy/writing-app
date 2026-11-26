@@ -108,13 +108,20 @@ export function SetupTab() {
       </details>
 
       <div className={`wt-block src-background${w.backgroundOff ? ' off' : ''}`}>
-        <div className="wt-head"><label className="wt-on" title="Send Background (switch off to keep the text but leave it out)"><input type="checkbox" checked={!w.backgroundOff} onChange={(e) => setW({ backgroundOff: !e.target.checked || undefined })} /> <b>Background</b></label> <em className="muted small">~{estimateTokens(w.background)} tokens</em></div>
+        <FoldHead id="background" text={w.background}>
+          <label className="wt-on" title="Send Background (switch off to keep the text but leave it out)"><input type="checkbox" checked={!w.backgroundOff} onChange={(e) => setW({ backgroundOff: !e.target.checked || undefined })} /> <b>Background</b></label> <em className="muted small">~{estimateTokens(w.background)} tokens</em>
+        </FoldHead>
+        <div className="fold-body">
         <p className="muted small">Always sent, at the top. For what's always true: premise, characters, setting, style.</p>
         <textarea rows={7} value={w.background} onChange={(e) => setW({ background: e.target.value })} placeholder="Story premise, characters, setting, style…" />
+        </div>
       </div>
 
       <div className={`wt-block src-steering${w.steeringOff ? ' off' : ''}`}>
-        <div className="wt-head"><label className="wt-on" title="Send Steering (switch off to keep the text but leave it out)"><input type="checkbox" checked={!w.steeringOff} onChange={(e) => setW({ steeringOff: !e.target.checked || undefined })} /> <b>Steering</b></label> <em className="muted small">~{estimateTokens(w.steering)} tokens</em></div>
+        <FoldHead id="steering" text={w.steering}>
+          <label className="wt-on" title="Send Steering (switch off to keep the text but leave it out)"><input type="checkbox" checked={!w.steeringOff} onChange={(e) => setW({ steeringOff: !e.target.checked || undefined })} /> <b>Steering</b></label> <em className="muted small">~{estimateTokens(w.steering)} tokens</em>
+        </FoldHead>
+        <div className="fold-body">
         <p className="muted small">Sent just before each reply, so it pulls hardest on what comes next: tone, pacing, focus, point of view. Keep it short.</p>
         <textarea rows={4} value={w.steering} onChange={(e) => setW({ steering: e.target.value })} placeholder="[Style: vivid, slow-burn. Focus on Mara's POV.]" />
         <details>
@@ -138,6 +145,7 @@ export function SetupTab() {
             which weakens the note.
           </p>
         </details>
+        </div>
       </div>
       <OutlineSection chat={chat} />
       <StyleToggles />
@@ -175,5 +183,26 @@ export function SetupTab() {
       </button>
 
     </div>
+  );
+}
+
+/** A Setup block's header that folds the block away (remembered), with a one-line preview when folded.
+ * Folded by default once it has text, since Background and Steering change less often than the Outline. */
+function FoldHead({ id, text, children }: { id: string; text: string; children: React.ReactNode }) {
+  const key = `ui:fold:${id}`;
+  const [open, setOpen] = useState(() => {
+    const v = localStorage.getItem(key);
+    return v ? v === 'open' : !text.trim();
+  });
+  const toggle = () => { setOpen(!open); try { localStorage.setItem(key, open ? 'closed' : 'open'); } catch { /* ignore */ } };
+  return (
+    <>
+      <div className={`wt-head fold-head${open ? ' open' : ''}`}>
+        {children}
+        <span className="spacer" />
+        <button className="icon small fold-btn" onClick={toggle} aria-expanded={open} title={open ? 'Fold away' : 'Show and edit'}>{open ? '▾' : '▸'}</button>
+      </div>
+      {!open && <button className="fold-preview muted small" onClick={toggle} title="Show and edit">{text.trim() ? text.trim().replace(/\s+/g, ' ') : 'Empty. Click to add.'}</button>}
+    </>
   );
 }
