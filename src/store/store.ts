@@ -54,6 +54,8 @@ interface State {
   lastContext?: BuildResult;
   /** Message (or highlighted part of one) the Rewrite box is open for. */
   rewriteTarget?: RewriteTarget;
+  /** The Retcon window, open; `fromId` is the message it starts from. */
+  retconOpen?: { fromId?: string };
   compileOpen: boolean;
   syncOpen: boolean;
   /** Shown while a reply waits for a Helper or Proofread job to finish. */
@@ -485,7 +487,7 @@ async function sendNow(text: string, attachments?: Attachment[]) {
  * Generates a reply. With `targetId` (an assistant message) a new swipe is added to it using
  * the history before it; otherwise a new assistant message is appended.
  */
-const JOB_NAMES: Record<Job, string> = { helper: 'Helper', proofread: 'proofread', updates: 'notes update', summary: 'summary', filter: 'cliché check', rewrite: 'rewrite' };
+const JOB_NAMES: Record<Job, string> = { helper: 'Helper', proofread: 'proofread', updates: 'notes update', summary: 'summary', filter: 'cliché check', rewrite: 'rewrite', retcon: 'retcon' };
 let waitCancelled = false;
 /** Gives up on a reply that is waiting for a side job; the side job carries on. */
 export function cancelWait() {
@@ -795,6 +797,7 @@ export const ui = {
   openLibrary: (open: boolean) => set({ libraryOpen: open, sidebarOpen: false }),
   clearError: () => set({ error: undefined }),
   openRewrite: (t?: RewriteTarget) => set({ rewriteTarget: t }),
+  openRetcon: (o?: { fromId?: string }) => set({ retconOpen: o }),
   openCompile: (open: boolean) => set({ compileOpen: open }),
   openSync: (open: boolean) => set({ syncOpen: open }),
 };

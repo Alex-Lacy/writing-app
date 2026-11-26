@@ -16,13 +16,14 @@ export const JOB_LABEL: Record<Job, string> = {
   summary: 'Auto-summary',
   filter: 'Cliché Filter rewrites',
   rewrite: 'Rewrite with feedback',
+  retcon: 'Retcon',
 };
 
 const STRONG = 'deepseek-ai/DeepSeek-V4-Pro-0813';
 const QUICK = 'deepseek-ai/DeepSeek-V4.1-Flash-1017';
-const FEATHERLESS_DEFAULT: Partial<Record<Job, string>> = { helper: STRONG, proofread: STRONG, updates: QUICK, summary: QUICK, filter: QUICK };
+const FEATHERLESS_DEFAULT: Partial<Record<Job, string>> = { helper: STRONG, proofread: STRONG, updates: QUICK, summary: QUICK, filter: QUICK, retcon: QUICK };
 /** Jobs that plan or check consistency think; the rest answer directly. */
-const THINKS: Record<Job, boolean> = { helper: true, proofread: true, updates: false, summary: false, filter: false, rewrite: false };
+const THINKS: Record<Job, boolean> = { helper: true, proofread: true, updates: false, summary: false, filter: false, rewrite: false, retcon: false };
 
 export interface JobModel {
   provider: ProviderConfig;

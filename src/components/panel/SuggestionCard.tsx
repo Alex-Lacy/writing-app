@@ -11,6 +11,7 @@ const SOURCE: Record<Suggestion['source'], string> = {
   proofread: 'Proofread',
   rewrite: 'Rewrite',
   filter: 'Cliché Filter',
+  retcon: 'Retcon',
 };
 
 function title(x: Suggestion, bookName: (id: string) => string): string {
@@ -25,7 +26,7 @@ function title(x: Suggestion, bookName: (id: string) => string): string {
     case 'codex-edit': return `Update Codex entry: ${t.entry.name}`;
     case 'codex-remove': return `Remove Codex entry${bookName(t.bookId) ? ` from ${bookName(t.bookId)}` : ''}`;
     case 'summary': return t.replaces?.length ? (t.part.merged ? 'Merged summary' : 'Refreshed summary part') : 'Summary of older story';
-    case 'passage': return x.source === 'proofread' ? 'Correction' : x.source === 'filter' ? 'Cliché fix' : 'Rewrite';
+    case 'passage': return x.source === 'proofread' ? 'Correction' : x.source === 'filter' ? 'Cliché fix' : x.source === 'retcon' ? 'Retcon edit' : 'Rewrite';
     case 'style-add': return `New Style module: ${t.module.name}`;
     case 'style-edit': return `Update Style module: ${t.name}`;
     case 'tags': return 'Story tags';

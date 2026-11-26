@@ -35,6 +35,6 @@ await p.evaluate(async () => { const st = await import('/src/store/store.ts'); s
 console.log('plot helper model:', await pick.locator('option:checked').innerText());
 await p.evaluate(async () => { const st = await import('/src/store/store.ts'); st.ui.openHelper('helper-codex'); });
 console.log('codex remembered:', await pick.locator('option:checked').innerText());
-console.log(await p.evaluate(async () => { const st = await import('/src/store/store.ts'); return JSON.stringify([st.useStore.getState().settings.helperModels, localStorage.getItem('lastHelper:' + st.useStore.getState().currentChatId), await p_sel()]); function p_sel() { return document.querySelector('.helper-top select')?.value; } }));
+console.log(await p.evaluate(async () => { const st = await import('/src/store/store.ts'); return JSON.stringify([st.useStore.getState().settings.helperModels, localStorage.getItem('lastHelper:' + st.useStore.getState().currentChatId), await p_sel()]); function p_sel() { return document.querySelector('.helper-top .row select')?.value; } }));
 console.log('errors:', errs);
 await b.close();

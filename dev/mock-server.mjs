@@ -111,6 +111,14 @@ http.createServer(async (req, res) => {
     }
     return res.end('data: [DONE]\n\n');
   }
+  if (sys.includes('retcon note')) {
+    const edits = [];
+    for (const [, n, body] of String(last.content).matchAll(/## Message (\d+)\n([\s\S]*?)(?=\n\n## Message|$)/g)) {
+      const sentence = body.split(/(?<=[.!?"])\s+/).find((x) => x.includes('Sanctuary'));
+      if (sentence) edits.push({ m: Number(n), quote: sentence, text: sentence.replace('Sanctuary', 'Pristella') });
+    }
+    return reply(JSON.stringify({ edits, background: 'Subaru came back from Pristella.' }));
+  }
   if (sys.includes('revising one passage')) return reply('A cleaner passage.');
   if (sys.includes('revising one message')) return reply('The whole message, rewritten as asked.');
   if (j.continue_final_message) {

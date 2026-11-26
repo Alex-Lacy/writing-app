@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { checkForUpdates } from '../../features/updates';
-import { currentChat, DEFAULT_UPDATES_EVERY, updateChat, useStore } from '../../store/store';
+import { currentChat, DEFAULT_UPDATES_EVERY, ui, updateChat, useStore } from '../../store/store';
 import { acceptAll, reject } from '../../store/suggestions';
 import { SuggestionCard } from './SuggestionCard';
 
@@ -50,6 +50,7 @@ export function SuggestionsTab() {
         </label>
         <div className="row">
           <button className="small" disabled={busy} onClick={runNow}>{busy ? 'Checking…' : 'Update notes now'}</button>
+          <button className="small ghost" onClick={() => ui.openRetcon({})} title="Change a fact and fix the sentences in the story that contradict it">Retcon…</button>
         </div>
         {note && <p className="muted small">{note}</p>}
       </section>

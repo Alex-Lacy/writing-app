@@ -80,26 +80,28 @@ export function HelperTab({ popped = false }: { popped?: boolean }) {
 
   return (
     <div className={`panel-body helper${popped ? ' popped' : ''}`} ref={scroll.ref} onScroll={scroll.onScroll}>
-      <div className="row helper-top">
-        <select value={helper.id} onChange={(e) => ui.openHelper(e.target.value)}>
-          {helpers.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-        </select>
-        <span className="spacer" />
-        {popped
-          ? <button className="small ghost" onClick={() => ui.popHelper(false)} title="Put the Helper back in the side panel">⇲ Back to sidebar</button>
-          : <button className="small ghost helper-pop" onClick={() => ui.popHelper(true)} title="Trial: open the Helper in a large window">⇱ Pop out</button>}
-        {count > 0 && <button className="small ghost" onClick={() => confirm('Clear this conversation? Its open suggestions stay in Suggestions.') && clearThread(chat.id, helper.id)}>Start over</button>}
+      <div className="helper-top">
+        <div className="row">
+          <select value={helper.id} onChange={(e) => ui.openHelper(e.target.value)}>
+            {helpers.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+          </select>
+          <span className="spacer" />
+          {popped
+            ? <button className="small ghost" onClick={() => ui.popHelper(false)} title="Put the Helper back in the side panel">⇲ Back to sidebar</button>
+            : <button className="small ghost helper-pop" onClick={() => ui.popHelper(true)} title="Trial: open the Helper in a large window">⇱ Pop out</button>}
+          {count > 0 && <button className="small ghost" onClick={() => confirm('Clear this conversation? Its open suggestions stay in Suggestions.') && clearThread(chat.id, helper.id)}>Start over</button>}
+        </div>
+        <label className="helper-model small">
+          <span className="muted">Model</span>
+          <select value={picked && choices.some((c) => c.key === picked) ? picked : ''} onChange={(e) => void pickModel(e.target.value)} title="The model this Helper uses. Pick a faster one for quick edits; remembered for this Helper.">
+            <option value="">{defaultName ? `Default (${defaultName})` : 'Default'}</option>
+            {choices.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
+          </select>
+        </label>
       </div>
       <p className="muted small">
         {helper.blurb} It sees this story's setup and recent text, and suggests changes for you to accept.
       </p>
-      <label className="helper-model small">
-        <span className="muted">Model</span>
-        <select value={picked && choices.some((c) => c.key === picked) ? picked : ''} onChange={(e) => void pickModel(e.target.value)} title="The model this Helper uses. Pick a faster one for quick edits; remembered for this Helper.">
-          <option value="">{defaultName ? `Default (${defaultName})` : 'Default'}</option>
-          {choices.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
-        </select>
-      </label>
       <div className="helper-log">
         {thread?.messages.map((m, i) => (
           m.role === 'tool' ? (

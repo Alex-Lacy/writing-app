@@ -129,6 +129,7 @@ export const MessageItem = memo(function MessageItem({ m, isLast, outOfContext }
           <details className="more" onClick={(e) => { if ((e.target as HTMLElement).tagName === 'BUTTON') (e.currentTarget as HTMLDetailsElement).open = false; }}>
             <summary title="More">⋯</summary>
             <div className="more-menu">
+              <button className="ghost" onClick={() => ui.openRetcon({ fromId: m.id })} disabled={busy} title="Change a fact from here on: only the sentences that contradict it are rewritten">Retcon from here…</button>
               {!isLast && <button className="ghost" onClick={() => duplicateChat(m.chatId, m.id)} disabled={busy} title="Copy the story up to here into a new story, to try a different direction">Branch from here</button>}
               {m.swipes.length > 1 && <button className="ghost" onClick={() => deleteSwipe(m.id)} disabled={busy}>Delete this version</button>}
               <button className="ghost" onClick={() => deleteMessage(m.id)} disabled={busy}>Delete message</button>

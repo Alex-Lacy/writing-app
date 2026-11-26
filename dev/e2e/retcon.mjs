@@ -1,0 +1,46 @@
+import { chromium } from 'playwright-core';
+const b = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const p = await b.newPage({ viewport: { width: 1280, height: 860 } });
+const errs = [];
+p.on('pageerror', (e) => errs.push(e.message));
+p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
+await p.goto('http://127.0.0.1:5173');
+await p.waitForSelector('.modal');
+const card = p.locator('.card').first();
+await card.locator('.provider-more summary').click();
+await card.getByLabel('Address (base URL)').fill('http://localhost:8787/v1');
+await card.getByLabel('Name', { exact: true }).fill('Mock');
+await card.locator('input[type=password]').fill('test-key');
+await card.getByText('Test connection').click();
+await p.waitForSelector('text=Connected, 2 models');
+await card.getByText('Pick models').click();
+await p.getByText('Fetch model list').click();
+await p.locator('.remote-row button').nth(0).click();
+await p.locator('.modal-head .icon').click();
+await p.locator('.composer textarea').fill('Mara at the docks SLOP');
+for (const t of ['Subaru returns from the Sanctuary at dusk', 'He sleeps in the carriage']) {
+  await p.locator('.composer textarea').fill(t);
+  await p.keyboard.press('Enter');
+  await p.waitForFunction((n) => document.querySelectorAll('.msg-assistant').length === n && !document.querySelector('.streaming'), t.startsWith('Subaru') ? 1 : 2);
+  await p.waitForTimeout(600);
+}
+// Retcon from the first message, via its ⋯ menu.
+await p.locator('.msg').first().hover();
+await p.locator('.msg').first().locator('details.more summary').click();
+await p.locator('.msg').first().locator('button:has-text("Retcon from here")').click();
+await p.locator('.retcon-modal textarea').fill('Subaru is coming back from Pristella.');
+console.log('scope:', await p.locator('.retcon-modal select').first().locator('option:checked').innerText(), '|', await p.locator('.retcon-modal button.primary').innerText());
+await p.locator('.retcon-modal button.primary').click();
+await p.waitForSelector('.retcon-top');
+console.log('found:', await p.locator('.retcon-top b').innerText(), '| diffs:', await p.locator('.retcon-modal .sg-diff ins').allInnerTexts());
+await p.locator('.retcon-top button:has-text("Apply all")').click();
+await p.waitForTimeout(500);
+const texts = await p.locator('.msg .msg-body').allInnerTexts();
+console.log('Sanctuary left:', texts.filter((t) => t.includes('Sanctuary')).length, '| Pristella now:', texts.filter((t) => t.includes('Pristella')).length, '| bar:', await p.locator('.retcon-top b').innerText());
+await p.locator('.retcon-top button:has-text("Undo all")').click();
+await p.waitForTimeout(500);
+const back = await p.locator('.msg .msg-body').allInnerTexts();
+console.log('after undo, Sanctuary:', back.filter((t) => t.includes('Sanctuary')).length);
+await p.locator('.retcon-modal').screenshot({ path: '/tmp/retcon.png' });
+console.log('errors:', errs);
+await b.close();

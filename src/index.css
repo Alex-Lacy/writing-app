@@ -411,8 +411,14 @@ details.section > summary { cursor: pointer; padding: 4px 0; }
 .sg-diff del { background: rgba(212, 112, 107, 0.18); color: var(--muted, #999); text-decoration-color: rgba(212, 112, 107, 0.7); border-radius: 3px; }
 .sg-diff ins { background: rgba(111, 157, 106, 0.25); text-decoration: none; border-radius: 3px; }
 .sg-diff del + ins { margin-left: 3px; }
-.helper-model { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
+.helper-model { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; }
 .helper-model select { flex: 1; min-width: 0; max-width: 320px; }
 .job-stop { font-size: 10px; padding: 2px 6px; margin-left: -4px; }
 /* Suggestions: the count and Accept all / Reject all stay at the top of a long list */
 .sg-top { position: sticky; top: -12px; z-index: 2; background: var(--bg2); padding: 8px 0 6px; }
+/* Retcon window */
+.retcon-modal { width: min(820px, 96vw); }
+.retcon-modal textarea { width: 100%; }
+.retcon-opts { gap: 12px; flex-wrap: wrap; }
+.retcon-top { position: sticky; top: -12px; z-index: 2; background: var(--bg2); padding: 8px 0; }
+.retcon-edit { margin-bottom: 6px; }

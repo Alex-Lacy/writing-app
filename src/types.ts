@@ -189,7 +189,9 @@ export interface Suggestion {
   id: string;
   chatId: string;
   /** Who made it. */
-  source: 'helper' | 'updates' | 'summary' | 'proofread' | 'rewrite' | 'filter';
+  source: 'helper' | 'updates' | 'summary' | 'proofread' | 'rewrite' | 'filter' | 'retcon';
+  /** Cards made together (one retcon), handled as a set. */
+  group?: string;
   target: SuggestionTarget;
   /** Text before and after (for display; codex entries use their text). */
   before: string;
@@ -248,7 +250,7 @@ export interface FilterSettings {
 
 // ---------- Jobs: which model does what ----------
 
-export type Job = 'proofread' | 'helper' | 'updates' | 'summary' | 'filter' | 'rewrite';
+export type Job = 'proofread' | 'helper' | 'updates' | 'summary' | 'filter' | 'rewrite' | 'retcon';
 /** A model for a job: a model key from "Your models", or providerId::modelId. Unset = default. */
 export type JobModels = Partial<Record<Job, string>>;
 
