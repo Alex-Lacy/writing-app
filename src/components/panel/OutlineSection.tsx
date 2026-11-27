@@ -1,7 +1,7 @@
 import { estimateTokens } from '../../context/tokens';
 import { useState } from 'react';
 import { chaptersOf, moveMarker, outlineBlocks, parseOutline } from '../../context/outline';
-import { planNextChapter } from '../../features/outline';
+import { planNextChapter, stopPlanning } from '../../features/outline';
 import { ui, updateChat } from '../../store/store';
 import type { Chat } from '../../types';
 
@@ -31,7 +31,9 @@ export function OutlineSection({ chat }: { chat: Chat }) {
       {nextOpen && (
         <p className="muted small">
           {nextOpen.title}: scenes not written out yet. They're planned automatically as the story gets close{nextOpen.pins.length ? `, keeping your ${nextOpen.pins.length} "!" moment${nextOpen.pins.length === 1 ? '' : 's'}` : ''}.{' '}
-          <button className="small ghost" disabled={planning} onClick={() => { setPlanning(true); void planNextChapter(chat.id, true).finally(() => setPlanning(false)); }}>{planning ? 'Planning…' : 'Plan them now'}</button>
+          {planning
+            ? <><span className="spinner" /> Planning… <button className="small ghost" onClick={() => stopPlanning(chat.id)}>■ Stop</button></>
+            : <button className="small ghost" onClick={() => { setPlanning(true); void planNextChapter(chat.id, true).catch(() => {}).finally(() => setPlanning(false)); }}>Plan them now</button>}
         </p>
       )}
       <details>

@@ -102,6 +102,9 @@ http.createServer(async (req, res) => {
     return reply(JSON.stringify(Object.entries(known).filter(([n]) => part.split('# Part')[1]?.includes(n)).map(([name, [category, text]]) => ({ name, category, keys: [name], text }))));
   }
   if (sys.includes('You plan the scenes of one chapter')) {
+    // SLOWPLAN in a chapter title holds the reply for 20 seconds, to test stopping it.
+    if (String(last.content).includes('SLOWPLAN')) await new Promise((r) => { const t = setTimeout(r, 20000); req.on('close', () => clearTimeout(t)); res.on('close', () => { clearTimeout(t); r(); }); });
+    if (res.destroyed || res.writableEnded) return;
     const pins = [...String(last.content).split('# Must-have moments in it')[1].matchAll(/^- (.+)$/gm)].map((m) => m[1]);
     return reply(JSON.stringify(['An opening scene.', ...pins.map((p) => p.replace('her', 'Mara')), 'A closing scene.']));
   }

@@ -50,7 +50,10 @@ const PLAN = `You plan the scenes of one chapter of a story, from the story's ch
 The writer's must-have moments for this chapter are listed; include every one of them word for word as its own beat, where it fits in the order, and build the other scenes around them.
 Reply with JSON only: ["<beat>", "<beat>", ...]`;
 
-const planning = new Set<string>();
+const planning = new Map<string, AbortController>();
+
+/** Stops planning a chapter's scenes for this story, if it's under way. */
+export const stopPlanning = (chatId: string) => planning.get(chatId)?.abort();
 
 /** Writes out the scenes of the next chapter that only has a heading (and maybe pinned moments). */
 export async function planNextChapter(chatId: string, force = false) {
@@ -59,7 +62,8 @@ export async function planNextChapter(chatId: string, force = false) {
   if (!chat || !ol || ol.off || planning.has(chatId)) return false;
   const ch = force ? chaptersOf(ol.text).find((c) => c.open) : chapterNeedingBeats(ol.text);
   if (!ch) return false;
-  planning.add(chatId);
+  const stop = new AbortController();
+  planning.set(chatId, stop);
   try {
     const all = chatId === useStore.getState().currentChatId ? useStore.getState().messages : await repo.messages(chatId);
     const recent = transcript(all.slice(-6)).slice(-6000);
@@ -71,6 +75,7 @@ export async function planNextChapter(chatId: string, force = false) {
       chat,
       label: `Planning the scenes of ${ch.title.split(/[:\u2014-]/)[0].trim() || 'the next chapter'}`,
       maxTokens: 1500,
+      signal: stop.signal,
       temperature: 0.6,
       messages: [
         { role: 'system', content: PLAN },
@@ -97,6 +102,9 @@ export async function planNextChapter(chatId: string, force = false) {
     if (!now || !still) return false;
     await updateChat({ outline: { ...now, text: setChapterBeats(now.text, still, keepPins(written, still.pins)) } }, chatId);
     return true;
+  } catch (e) {
+    if (stop.signal.aborted || (e as Error).name === 'AbortError') return false;
+    throw e;
   } finally {
     planning.delete(chatId);
   }
