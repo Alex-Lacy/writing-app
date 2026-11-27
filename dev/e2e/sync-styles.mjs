@@ -1,4 +1,4 @@
-// Style modules and custom Helpers travel with a sync, edits and deletions too.
+// Style modules, custom Helpers, system prompts and the default system prompt travel with a sync, edits and deletions too.
 import { chromium } from 'playwright-core';
 const RELAY = 'http://localhost:8787/ntfy';
 const PIPE = 'http://localhost:8787/pipe';
@@ -29,7 +29,7 @@ const openSync = async (p) => {
 const body = (p) => p.locator('.sync .modal-body').innerText();
 
 const save = (p, patch) => p.evaluate(async (x) => (await import('/src/store/store.ts')).saveSettings(x), patch);
-const lib = (p) => p.evaluate(async () => { const s = (await import('/src/store/store.ts')).useStore.getState().settings; return { styles: (s.styles ?? []).map((m) => `${m.name}=${m.text}`), helpers: (s.helpers ?? []).map((h) => h.name) }; });
+const lib = (p) => p.evaluate(async () => { const s = (await import('/src/store/store.ts')).useStore.getState().settings; return { prompt: s.defaultSystemPrompt.slice(0, 20), presets: (await import('/src/store/store.ts')).useStore.getState().presets.map((p) => p.name), styles: (s.styles ?? []).map((m) => `${m.name}=${m.text}`), helpers: (s.helpers ?? []).map((h) => h.name) }; });
 async function sync(desk, phone, first) {
   if (first) {
     await openSync(desk);
@@ -54,10 +54,13 @@ async function sync(desk, phone, first) {
 const desk = await device('desktop');
 const phone = await device('phone');
 await save(desk, { styles: [{ id: 'st1', name: 'Terse', text: 'Short sentences.' }, { id: 'st2', name: 'Lush', text: 'Rich imagery.' }], helpers: [{ id: 'hp1', name: 'Namer', blurb: 'Names things', instructions: 'Suggest names.' }] });
+await desk.evaluate(async () => (await import('/src/store/store.ts')).upsertPreset({ id: 'pr1', name: 'Noir', systemPrompt: 'Hardboiled.' }));
+await save(desk, { defaultSystemPrompt: 'DESK DEFAULT prompt' });
 console.log('1 plan:', await sync(desk, phone, true));
 console.log('  phone library:', await lib(phone));
 await save(phone, { styles: [{ id: 'st1', name: 'Terse', text: 'Very short sentences.' }] }); // edits Terse, deletes Lush
 await phone.evaluate(async () => (await import('/src/sync/units.ts')).noteGone('st2'));
+await phone.evaluate(async () => (await import('/src/store/store.ts')).deletePreset('pr1'));
 console.log('2 plan:', await sync(desk, phone));
 console.log('  desk library:', await lib(desk));
 console.log('errors:', errs);

@@ -173,18 +173,8 @@ export function SyncModal() {
     ui.openSync(false);
   };
 
-  return (
-    <div className="modal-scrim" onClick={close}>
-      <div className="modal sync" onClick={(e) => e.stopPropagation()}>
-        <header className="modal-head">
-          <h2>Sync with another device</h2>
-          <button className="icon" onClick={close}>✕</button>
-        </header>
-        <div className="modal-body">
-          {stage.k === 'start' && (
-            <>
-              {pairs.length > 0 && (
-                <div className="card sync-pairs">
+  const pairsCard = pairs.length > 0 && (
+<div className="card sync-pairs">
                   <b>Your devices</b>
                   {pairs.map((p) => (
                     <div key={p.peerId} className="row sync-pair">
@@ -199,7 +189,19 @@ export function SyncModal() {
                       : 'Open Writing Studio on that device too (it listens while it is open), then press Sync now. This goes through the relay, encrypted with the code you paired with.'}
                   </p>
                 </div>
-              )}
+  );
+
+  return (
+    <div className="modal-scrim" onClick={close}>
+      <div className="modal sync" onClick={(e) => e.stopPropagation()}>
+        <header className="modal-head">
+          <h2>Sync with another device</h2>
+          <button className="icon" onClick={close}>✕</button>
+        </header>
+        <div className="modal-body">
+          {stage.k === 'start' && (
+            <>
+              {pairsCard}
               <p className="muted small">
                 Copies stories and shared Codex books between your phone and computer, straight from one device to the other.
                 Your stories never go through a server: the two devices only swap a short, encrypted connection note to find each other.
@@ -275,6 +277,7 @@ export function SyncModal() {
                 <button onClick={() => { setShared(''); setStage({ k: 'start' }); }}>Try again</button>
               </div>
               {shared && <p className="small">{shared}</p>}
+              {pairs.length > 0 && pipe !== false && <><p className="small">These devices have synced before, so you can sync with them through the relay instead, no code needed:</p>{pairsCard}</>}
               {stage.noLocal && <p className="muted small">Sharing the address asks to use the camera, then turns it straight off: nothing is recorded. Browsers only reveal a device's Wi-Fi address to pages allowed to use the camera.</p>}
             </>
           )}

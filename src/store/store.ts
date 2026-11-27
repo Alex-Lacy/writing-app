@@ -228,6 +228,7 @@ export async function upsertPreset(p: Preset) {
 export async function deletePreset(id: string) {
   set({ presets: get().presets.filter((x) => x.id !== id) });
   await repo.del('presets', id);
+  void import('../sync/units').then((u) => u.noteGone(id));
 }
 
 // ---------- chats ----------

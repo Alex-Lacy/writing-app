@@ -108,6 +108,8 @@ export async function hostReview(link: Link): Promise<Review & { here: Unit[]; t
 export function copyOf(u: Unit, from: string): Unit {
   if (u.kind === 'book') return { ...u, id: uid(), book: { ...u.book, id: uid(), name: `${u.book.name} (${from})` } };
   if (u.kind === 'style') { const id = uid(); return { ...u, id, item: { ...u.item, id, name: `${u.item.name} (${from})` } }; }
+  if (u.kind === 'prompt') { const id = uid(); return { kind: 'preset', id, item: { id, name: `Default system prompt (${from})`, systemPrompt: u.item.text } }; }
+  if (u.kind === 'preset') { const id = uid(); return { ...u, id, item: { ...u.item, id, name: `${u.item.name} (${from})` } }; }
   if (u.kind === 'helper') { const id = uid(); return { ...u, id, item: { ...u.item, id, builtIn: undefined, name: `${u.item.name} (${from})` } }; }
   const chatId = uid();
   const bookId = u.book ? uid() : undefined;
@@ -156,17 +158,21 @@ async function writeUnits(put: Unit[], del: { id: string; kind: Unit['kind'] }[]
       await repo.replaceStory({ ...u, chat: { ...u.chat, num: mine?.num ?? ++top } });
     }
     else if (u.kind === 'book') await repo.put('codex', u.book);
+    else if (u.kind === 'preset') await repo.put('presets', u.item);
   }
   for (const d of del) {
     if (d.kind === 'story') await repo.deleteChat(d.id);
     else if (d.kind === 'book') await repo.del('codex', d.id);
+    else if (d.kind === 'preset') await repo.del('presets', d.id);
   }
   // Style modules and custom Helpers live in settings: replaced or removed by id.
   const lib = put.filter((u): u is StyleUnit | HelperUnit => u.kind === 'style' || u.kind === 'helper');
   const libDel = del.filter((d) => d.kind === 'style' || d.kind === 'helper');
-  if (lib.length || libDel.length) {
+  const prompt = put.find((u) => u.kind === 'prompt');
+  if (lib.length || libDel.length || prompt) {
     const s = await repo.getSettings();
     if (s) {
+      if (prompt?.kind === 'prompt') s.defaultSystemPrompt = prompt.item.text;
       for (const kind of ['style', 'helper'] as const) {
         const key = LIB_LIST[kind];
         const mine = (s[key] ?? []) as { id: string }[];

@@ -448,7 +448,7 @@ export async function connect(code: string, role: 'host' | 'guest', o: { signal?
       const rc = new RelayChannel(o.pipe || PIPE_DEFAULT, topic, key, role);
       try {
         await new Promise<void>((res, rej) => {
-          const t = setTimeout(() => rej(new Error('timeout')), 60_000);
+          const t = setTimeout(() => rej(new Error('timeout')), 90_000);
           rc.onmessage = (m) => m.data === 'hello' && (clearTimeout(t), res());
           rc.onclose = () => rej(new Error('closed'));
           o.signal?.addEventListener('abort', () => rej(new DOMException('Cancelled', 'AbortError')));
@@ -458,7 +458,7 @@ export async function connect(code: string, role: 'host' | 'guest', o: { signal?
         rc.close();
         if ((err as Error).name === 'AbortError') throw err;
         const why = (err as Error).message === 'timeout'
-          ? 'Relay: reachable, but the other device never joined it within a minute. Reload the app on both devices (so both run the same version) and try again.'
+          ? 'Relay: reachable, but the other device never joined it within 90 seconds. Reload the app on both devices (so both run the same version) and try again.'
           : `Relay: ${(err as Error).message === 'closed' ? "couldn't reach it (blocked or offline?)" : (err as Error).message}.`;
         throw new ConnectError(`${e.message} The relay didn't work either.`, `${e.details}\n${why}`, e.noLocal);
       }

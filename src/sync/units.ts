@@ -3,14 +3,18 @@
 // remembers, per other device, the fingerprint each unit had when they last agreed (the "base"),
 // so a change on one side is told apart from changes on both (a real conflict).
 import { normalizeChat, repo } from '../db/db';
-import type { Chat, CodexBook, HelperDef, HelperThread, Message, StyleModule } from '../types';
+import { STORY_PROMPT, type Chat, type CodexBook, type HelperDef, type HelperThread, type Message, type Preset, type StyleModule } from '../types';
 
 export interface StoryUnit { kind: 'story'; id: string; chat: Chat; messages: Message[]; book?: CodexBook; threads: HelperThread[] }
 export interface BookUnit { kind: 'book'; id: string; book: CodexBook }
 /** A Library style module or custom Helper (kept in settings on each device). */
 export interface StyleUnit { kind: 'style'; id: string; item: StyleModule }
 export interface HelperUnit { kind: 'helper'; id: string; item: HelperDef }
-export type Unit = StoryUnit | BookUnit | StyleUnit | HelperUnit;
+/** A saved system prompt (Settings, Presets). */
+export interface PresetUnit { kind: 'preset'; id: string; item: Preset }
+/** The default system prompt for new stories (one per device, under a fixed id). */
+export interface PromptUnit { kind: 'prompt'; id: 'default-system-prompt'; item: { name: string; text: string } }
+export type Unit = StoryUnit | BookUnit | StyleUnit | HelperUnit | PresetUnit | PromptUnit;
 /** Where each Library kind lives in settings. */
 export const LIB_LIST = { style: 'styles', helper: 'helpers' } as const;
 
@@ -38,7 +42,7 @@ export async function sha(text: string): Promise<string> {
 export function syncView(u: Unit): unknown {
   const book = (b?: CodexBook) => b && { ...b, updatedAt: undefined };
   if (u.kind === 'book') return { kind: 'book', book: book(u.book) };
-  if (u.kind === 'style' || u.kind === 'helper') return { kind: u.kind, item: u.item };
+  if (u.kind === 'style' || u.kind === 'helper' || u.kind === 'preset' || u.kind === 'prompt') return { kind: u.kind, item: u.item };
   const chat: Record<string, unknown> = { ...normalizeChat(structuredClone(u.chat)) };
   for (const k of LOCAL_CHAT_FIELDS) delete chat[k];
   return {
@@ -66,6 +70,9 @@ export async function loadUnits(): Promise<Unit[]> {
   const settings = await repo.getSettings();
   for (const m of settings?.styles ?? []) out.push({ kind: 'style', id: m.id, item: m });
   for (const h of settings?.helpers ?? []) out.push({ kind: 'helper', id: h.id, item: h });
+  // Only once edited: a device still on the built-in prompt simply takes the other's.
+  if (settings?.defaultSystemPrompt !== undefined && settings.defaultSystemPrompt.trim() !== STORY_PROMPT.trim()) out.push({ kind: 'prompt', id: 'default-system-prompt', item: { name: 'Default system prompt', text: settings.defaultSystemPrompt } });
+  for (const p of await repo.all('presets')) out.push({ kind: 'preset', id: p.id, item: p });
   return out;
 }
 
@@ -74,7 +81,7 @@ export async function manifestOf(units: Unit[], deviceId: string, deviceName: st
     units.map(async (u) => ({
       id: u.id,
       kind: u.kind,
-      title: u.kind === 'story' ? `#${u.chat.num} ${u.chat.title}` : u.kind === 'book' ? `Codex: ${u.book.name}` : `${u.kind === 'style' ? 'Style module' : 'Helper'}: ${u.item.name}`,
+      title: u.kind === 'story' ? `#${u.chat.num} ${u.chat.title}` : u.kind === 'book' ? `Codex: ${u.book.name}` : u.kind === 'prompt' ? 'Default system prompt' : `${u.kind === 'style' ? 'Style module' : u.kind === 'helper' ? 'Helper' : 'System prompt'}: ${u.item.name}`,
       hash: await hashUnit(u),
       updatedAt: u.kind === 'story' ? u.chat.updatedAt : u.kind === 'book' ? u.book.updatedAt : 0,
       words: u.kind === 'story' ? wordsOf(u.messages) : undefined,
