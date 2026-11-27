@@ -28,6 +28,15 @@ export function SyncModal() {
   const [shared, setShared] = useState('');
   const current = useStore((s) => s.currentChatId);
   const [stage, setStage] = useState<Stage>({ k: 'start' });
+  const stageNow = useRef(stage);
+  stageNow.current = stage;
+  /** Host: if the other device goes away while the sync is under way or waiting for review, say so. */
+  const watch = (l: Link) => {
+    l.onClose = () => {
+      if (['review', 'applying', 'host', 'guest'].includes(stageNow.current.k))
+        setStage({ k: 'error', message: 'The connection to the other device was lost. Start the sync again on both devices.' });
+    };
+  };
   const [typed, setTyped] = useState('');
   const [choices, setChoices] = useState<Record<string, Choice>>({});
   const [only, setOnly] = useState(false);
@@ -61,8 +70,10 @@ export function SyncModal() {
     setStage({ k: 'host', code, status: 'Getting ready…' });
     try {
       link.current = await connect(code, 'host', { relay, turn, pipe, signal: abort.current.signal, onStatus: (status) => setStage({ k: 'host', code, status }) });
+      watch(link.current);
       setStage({ k: 'host', code, status: 'Connected. Comparing stories…' });
       const r = await hostReview(link.current);
+      await remember(r.remote.deviceId, r.remote.deviceName);
       setChoices({});
       setStage({ k: 'review', r, relayed: link.current.relayed });
     } catch (e) {
@@ -77,9 +88,7 @@ export function SyncModal() {
     setStage({ k: 'guest', status: 'Looking for the other device…' });
     try {
       link.current = await connect(code, 'guest', { relay, turn, pipe, signal: abort.current.signal, onStatus: (status) => setStage({ k: 'guest', status }) });
-      let peer: [string, string] | undefined;
-      const summary = await guestServe(link.current, (status) => setStage({ k: 'guest', status }), (id, name) => (peer = [id, name]));
-      if (peer) await remember(...peer);
+      const summary = await guestServe(link.current, (status) => setStage({ k: 'guest', status }), (id, name) => void remember(id, name));
       setStage({ k: 'done', summary });
     } catch (e) {
       fail(e);
@@ -97,6 +106,7 @@ export function SyncModal() {
       const session = await knock(p.secret, (await me()).deviceId, p.peerId, { pipe, signal });
       setStage({ k: 'guest', status: 'Connecting through the relay…' });
       link.current = await connectPaired(p.secret, session, 'host', { pipe, signal });
+      watch(link.current);
       setStage({ k: 'guest', status: 'Connected. Comparing stories…' });
       const r = await hostReview(link.current);
       setChoices({});
@@ -120,9 +130,7 @@ export function SyncModal() {
     void (async () => {
       try {
         link.current = await connectPaired(pair.secret, session, 'guest', { pipe, signal: abort.current!.signal });
-        let peer: [string, string] | undefined;
-        const summary = await guestServe(link.current, (status) => setStage({ k: 'guest', status }), (id, name) => (peer = [id, name]));
-        if (peer) await remember(...peer);
+          const summary = await guestServe(link.current, (status) => setStage({ k: 'guest', status }), (id, name) => void remember(id, name));
         setStage({ k: 'done', summary });
       } catch (e) {
         fail(e);

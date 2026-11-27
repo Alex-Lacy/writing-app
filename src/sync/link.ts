@@ -159,7 +159,8 @@ export class Link {
   private parts = new Map<string, string[]>();
   /** Messages nobody has asked for yet (so one that arrives early isn't lost). */
   private inbox: unknown[] = [];
-  private waiters: { match: (m: unknown) => boolean; res: (m: unknown) => void }[] = [];
+  private waiters: { match: (m: unknown) => boolean; res: (m: unknown) => void; rej: (e: Error) => void }[] = [];
+  private closed = false;
   private listener?: { match: (m: unknown) => boolean; h: (m: unknown) => void };
   onClose?: () => void;
   private ch: RTCDataChannel | RelayChannel;
@@ -174,10 +175,27 @@ export class Link {
     // Each relayed message is its own web request, so send big pieces.
     this.size = pc ? 16_000 : 2_000_000;
     ch.onmessage = (e: { data: unknown }) => this.receive(String(e.data));
-    ch.onclose = () => this.onClose?.();
+    ch.onclose = () => this.ended();
+    // A direct connection can drop without the channel saying so for a long while.
+    pc?.addEventListener('iceconnectionstatechange', () => ['failed', 'closed'].includes(pc.iceConnectionState) && this.ended());
+  }
+  /** The other side went away: whatever was waiting for it fails instead of waiting forever. */
+  private ended() {
+    if (this.closed) return;
+    this.closed = true;
+    const w = this.waiters;
+    this.waiters = [];
+    w.forEach((x) => x.rej(new Error('The connection to the other device was lost. Start the sync again on both devices.')));
+    this.onClose?.();
   }
   private receive(raw: string) {
-    const f = JSON.parse(raw) as { id: string; i: number; n: number; d: string };
+    let f: { id: string; i: number; n: number; d: string };
+    try {
+      f = JSON.parse(raw);
+    } catch {
+      return; // a late handshake word ("ready", "hello"), not a message
+    }
+    if (!f || typeof f !== 'object' || typeof f.id !== 'string') return;
     const list = this.parts.get(f.id) ?? [];
     list[f.i] = f.d;
     this.parts.set(f.id, list);
@@ -210,8 +228,9 @@ export class Link {
   /** Resolves with the next message that passes `match`. */
   next<T>(match: (m: unknown) => boolean, ms = 120_000): Promise<T> {
     return new Promise((res, rej) => {
+      if (this.closed) return rej(new Error('The connection to the other device was lost. Start the sync again on both devices.'));
       const t = setTimeout(() => rej(new Error('The other device stopped answering.')), ms);
-      this.waiters.push({ match, res: (m) => { clearTimeout(t); res(m as T); } });
+      this.waiters.push({ match, res: (m) => { clearTimeout(t); res(m as T); }, rej: (e) => { clearTimeout(t); rej(e); } });
       this.deliver();
     });
   }
@@ -391,6 +410,36 @@ export async function connect(code: string, role: 'host' | 'guest', o: { signal?
         else void incoming.then(ready);
         o.signal?.addEventListener('abort', () => rej(new DOMException('Cancelled', 'AbortError')));
       });
+      // Both sides must see the connection before either goes on: a channel can open on one
+      // side only, which left one device "comparing stories" forever while the other gave up.
+      // The guest says "ready"; the host answers "go" and only then do both go on. If either
+      // word doesn't arrive, both fall back to the relay together.
+      const both = await new Promise<boolean>((res) => {
+        const t = setTimeout(() => res(false), 15_000);
+        const say = (w: string) => {
+          try {
+            opened.send(w);
+          } catch {
+            clearTimeout(t);
+            res(false);
+          }
+        };
+        opened.onmessage = (m) => {
+          if (role === 'host' && m.data === 'ready') {
+            say('go');
+            clearTimeout(t);
+            res(true);
+          } else if (role === 'guest' && m.data === 'go') {
+            clearTimeout(t);
+            res(true);
+          }
+        };
+        opened.onclose = () => (clearTimeout(t), res(false));
+        if (role === 'guest') say('ready');
+      });
+      opened.onmessage = null;
+      opened.onclose = null;
+      if (!both) throw new ConnectError("Couldn't connect the two devices: the connection only opened on one side.", `Connection check: ${pc.iceConnectionState}.`);
     } catch (e) {
       if (!(e instanceof ConnectError) || o.pipe === false) throw e;
       // Couldn't reach each other directly: go through the relay instead, still encrypted.
