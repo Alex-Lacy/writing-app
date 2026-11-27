@@ -1,3 +1,4 @@
+import { noteGone } from '../sync/units';
 import { useState } from 'react';
 import { runJob } from '../ai/jobs';
 import { estimateTokens } from '../context/tokens';
@@ -144,7 +145,7 @@ function Styles() {
                 <button className="small primary" onClick={() => { void save(styles.map((x) => (x.id === m.id ? draft : x))); setOpen(undefined); }}>Save</button>
                 <button className="small ghost" disabled={busy || !draft.text.trim()} onClick={() => condense(draft)}>{busy ? 'Condensing…' : 'Condense with AI'}</button>
                 <span className="spacer" />
-                <button className="small ghost" onClick={() => { if (confirm(`Delete "${m.name}"?`)) { void save(styles.filter((x) => x.id !== m.id)); setOpen(undefined); } }}>Delete</button>
+                <button className="small ghost" onClick={() => { if (confirm(`Delete "${m.name}"?`)) { void save(styles.filter((x) => x.id !== m.id)); void noteGone(m.id); setOpen(undefined); } }}>Delete</button>
               </div>
               {condensed?.id === m.id && (
                 <div className="sg-card">
@@ -205,8 +206,8 @@ function Helpers() {
               <textarea rows={12} value={draft.instructions} onChange={(e) => setDraft({ ...draft, instructions: e.target.value })} />
               <div className="row">
                 <button className="small primary" onClick={() => { void save(draft); setOpen(undefined); }}>Save</button>
-                {builtIn(h.id) && mine.some((x) => x.id === h.id) && <button className="small ghost" onClick={() => saveSettings({ helpers: mine.filter((x) => x.id !== h.id) })}>Reset to built-in</button>}
-                {!builtIn(h.id) && <button className="small ghost" onClick={() => saveSettings({ helpers: mine.filter((x) => x.id !== h.id) })}>Delete</button>}
+                {builtIn(h.id) && mine.some((x) => x.id === h.id) && <button className="small ghost" onClick={() => { void saveSettings({ helpers: mine.filter((x) => x.id !== h.id) }); void noteGone(h.id); }}>Reset to built-in</button>}
+                {!builtIn(h.id) && <button className="small ghost" onClick={() => { void saveSettings({ helpers: mine.filter((x) => x.id !== h.id) }); void noteGone(h.id); }}>Delete</button>}
               </div>
             </>
           )}

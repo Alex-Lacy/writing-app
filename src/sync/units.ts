@@ -3,11 +3,16 @@
 // remembers, per other device, the fingerprint each unit had when they last agreed (the "base"),
 // so a change on one side is told apart from changes on both (a real conflict).
 import { normalizeChat, repo } from '../db/db';
-import type { Chat, CodexBook, HelperThread, Message } from '../types';
+import type { Chat, CodexBook, HelperDef, HelperThread, Message, StyleModule } from '../types';
 
 export interface StoryUnit { kind: 'story'; id: string; chat: Chat; messages: Message[]; book?: CodexBook; threads: HelperThread[] }
 export interface BookUnit { kind: 'book'; id: string; book: CodexBook }
-export type Unit = StoryUnit | BookUnit;
+/** A Library style module or custom Helper (kept in settings on each device). */
+export interface StyleUnit { kind: 'style'; id: string; item: StyleModule }
+export interface HelperUnit { kind: 'helper'; id: string; item: HelperDef }
+export type Unit = StoryUnit | BookUnit | StyleUnit | HelperUnit;
+/** Where each Library kind lives in settings. */
+export const LIB_LIST = { style: 'styles', helper: 'helpers' } as const;
 
 export interface ManifestItem { id: string; kind: Unit['kind']; title: string; hash: string; updatedAt: number; words?: number }
 export interface Manifest { deviceId: string; deviceName: string; items: ManifestItem[]; /** Deleted here: id -> when. */ gone: Record<string, number> }
@@ -33,6 +38,7 @@ export async function sha(text: string): Promise<string> {
 export function syncView(u: Unit): unknown {
   const book = (b?: CodexBook) => b && { ...b, updatedAt: undefined };
   if (u.kind === 'book') return { kind: 'book', book: book(u.book) };
+  if (u.kind === 'style' || u.kind === 'helper') return { kind: u.kind, item: u.item };
   const chat: Record<string, unknown> = { ...normalizeChat(structuredClone(u.chat)) };
   for (const k of LOCAL_CHAT_FIELDS) delete chat[k];
   return {
@@ -57,6 +63,9 @@ export async function loadUnits(): Promise<Unit[]> {
     out.push({ kind: 'story', id: c.id, chat: c, messages: await repo.messages(c.id), book: books.find((b) => b.id === c.codexId), threads: await repo.byChat('helperThreads', c.id) });
   }
   for (const b of books) if (!b.chatId) out.push({ kind: 'book', id: b.id, book: b });
+  const settings = await repo.getSettings();
+  for (const m of settings?.styles ?? []) out.push({ kind: 'style', id: m.id, item: m });
+  for (const h of settings?.helpers ?? []) out.push({ kind: 'helper', id: h.id, item: h });
   return out;
 }
 
@@ -65,9 +74,9 @@ export async function manifestOf(units: Unit[], deviceId: string, deviceName: st
     units.map(async (u) => ({
       id: u.id,
       kind: u.kind,
-      title: u.kind === 'story' ? `#${u.chat.num} ${u.chat.title}` : `Codex: ${u.book.name}`,
+      title: u.kind === 'story' ? `#${u.chat.num} ${u.chat.title}` : u.kind === 'book' ? `Codex: ${u.book.name}` : `${u.kind === 'style' ? 'Style module' : 'Helper'}: ${u.item.name}`,
       hash: await hashUnit(u),
-      updatedAt: u.kind === 'story' ? u.chat.updatedAt : u.book.updatedAt,
+      updatedAt: u.kind === 'story' ? u.chat.updatedAt : u.kind === 'book' ? u.book.updatedAt : 0,
       words: u.kind === 'story' ? wordsOf(u.messages) : undefined,
     })),
   );

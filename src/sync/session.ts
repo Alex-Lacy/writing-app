@@ -5,7 +5,7 @@ import { repo, type BackupData } from '../db/db';
 import { uid } from '../lib/id';
 import { init, selectChat, useStore } from '../store/store';
 import type { Link } from './link';
-import { hashUnit, loadUnits, manifestOf, mergeStories, plan, type Manifest, type PlanItem, type StoryUnit, type Unit } from './units';
+import { hashUnit, LIB_LIST, loadUnits, manifestOf, mergeStories, plan, type Manifest, type PlanItem, type HelperUnit, type StoryUnit, type StyleUnit, type Unit } from './units';
 
 export interface Me { deviceId: string; deviceName: string }
 
@@ -107,6 +107,8 @@ export async function hostReview(link: Link): Promise<Review & { here: Unit[]; t
 /** A copy of a unit with new ids, so both versions can be kept. */
 export function copyOf(u: Unit, from: string): Unit {
   if (u.kind === 'book') return { ...u, id: uid(), book: { ...u.book, id: uid(), name: `${u.book.name} (${from})` } };
+  if (u.kind === 'style') { const id = uid(); return { ...u, id, item: { ...u.item, id, name: `${u.item.name} (${from})` } }; }
+  if (u.kind === 'helper') { const id = uid(); return { ...u, id, item: { ...u.item, id, builtIn: undefined, name: `${u.item.name} (${from})` } }; }
   const chatId = uid();
   const bookId = u.book ? uid() : undefined;
   const ids = new Map(u.messages.map((m) => [m.id, uid()]));
@@ -153,11 +155,27 @@ async function writeUnits(put: Unit[], del: { id: string; kind: Unit['kind'] }[]
       const mine = chats.find((c) => c.id === u.id);
       await repo.replaceStory({ ...u, chat: { ...u.chat, num: mine?.num ?? ++top } });
     }
-    else await repo.put('codex', u.book);
+    else if (u.kind === 'book') await repo.put('codex', u.book);
   }
   for (const d of del) {
     if (d.kind === 'story') await repo.deleteChat(d.id);
-    else await repo.del('codex', d.id);
+    else if (d.kind === 'book') await repo.del('codex', d.id);
+  }
+  // Style modules and custom Helpers live in settings: replaced or removed by id.
+  const lib = put.filter((u): u is StyleUnit | HelperUnit => u.kind === 'style' || u.kind === 'helper');
+  const libDel = del.filter((d) => d.kind === 'style' || d.kind === 'helper');
+  if (lib.length || libDel.length) {
+    const s = await repo.getSettings();
+    if (s) {
+      for (const kind of ['style', 'helper'] as const) {
+        const key = LIB_LIST[kind];
+        const mine = (s[key] ?? []) as { id: string }[];
+        const add = lib.filter((u) => u.kind === kind).map((u) => ({ ...u.item }));
+        const drop = new Set([...libDel.filter((d) => d.kind === kind).map((d) => d.id), ...add.map((x) => x.id)]);
+        if (add.length || drop.size) (s as unknown as Record<string, unknown>)[key] = [...mine.filter((x) => !drop.has(x.id)), ...add];
+      }
+      await repo.putSettings(s);
+    }
   }
 }
 
