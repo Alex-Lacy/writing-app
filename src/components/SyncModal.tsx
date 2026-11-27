@@ -227,7 +227,7 @@ export function SyncModal() {
                 </p>
               )}
               <details className="muted small">
-                <summary>Advanced: relays</summary>
+                <summary>Advanced: relays · version {__BUILD__}</summary>
                 <p>The two devices find each other through a free public relay ({SIGNAL_DEFAULT}). It only ever carries an encrypted connection note. You can use your own ntfy server instead.</p>
                 <input value={relay} placeholder={SIGNAL_DEFAULT} onChange={(e) => void saveSettings({ syncRelay: e.target.value.trim() || undefined })} />
                 <label className="switch"><input type="checkbox" checked={!pipeOff} onChange={(e) => void saveSettings({ syncPipeOff: !e.target.checked || undefined })} /> If a direct connection fails, send through a relay</label>
@@ -267,7 +267,7 @@ export function SyncModal() {
           {stage.k === 'error' && (
             <>
               <p className="error">{stage.message}</p>
-              {stage.details && <pre className="small muted sync-details">{stage.details}</pre>}
+              <pre className="small muted sync-details">{stage.details ? `${stage.details}\n` : ''}App version: {__BUILD__}</pre>
               <div className="row">
                 {stage.noLocal && !!navigator.mediaDevices?.getUserMedia && (
                   <button onClick={() => shareLocalAddress().then(() => setShared('Done. Now start the sync again on both devices.'), () => setShared("The camera wasn't allowed, so the Wi-Fi address stays hidden."))}>Share Wi-Fi address</button>

@@ -457,7 +457,10 @@ export async function connect(code: string, role: 'host' | 'guest', o: { signal?
       } catch (err) {
         rc.close();
         if ((err as Error).name === 'AbortError') throw err;
-        throw new ConnectError(`${e.message} The relay didn't work either.`, e.details, e.noLocal);
+        const why = (err as Error).message === 'timeout'
+          ? 'Relay: reachable, but the other device never joined it within a minute. Reload the app on both devices (so both run the same version) and try again.'
+          : `Relay: ${(err as Error).message === 'closed' ? "couldn't reach it (blocked or offline?)" : (err as Error).message}.`;
+        throw new ConnectError(`${e.message} The relay didn't work either.`, `${e.details}\n${why}`, e.noLocal);
       }
       return new Link(rc);
     }

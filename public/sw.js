@@ -41,7 +41,8 @@ self.addEventListener('fetch', (e) => {
     // The newest page when the network answers within 4 seconds (so updates arrive); otherwise the cached one.
     e.respondWith(
       (async () => {
-        const net = fetch(req);
+        // Skip the browser's HTTP cache (GitHub Pages lets it keep the page for 10 minutes).
+        const net = fetch(req, { cache: 'no-cache' });
         try {
           const res = await Promise.race([net, timeout(4000)]);
           if (res.ok) {
